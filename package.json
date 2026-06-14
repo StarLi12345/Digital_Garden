@@ -1,0 +1,52 @@
+{
+  "name": "digital-garden-init",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "postinstall": "npx prisma generate",
+    "seed:test": "node scripts/seed-test-data.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@tiptap/extension-color": "^3.24.0",
+    "@tiptap/extension-highlight": "^3.24.0",
+    "@tiptap/extension-image": "^3.24.0",
+    "@tiptap/extension-link": "^3.24.0",
+    "@tiptap/extension-list-keymap": "^3.24.0",
+    "@tiptap/extension-task-item": "^3.24.0",
+    "@tiptap/extension-task-list": "^3.24.0",
+    "@tiptap/extension-text-align": "^3.24.0",
+    "@tiptap/extension-text-style": "^3.24.0",
+    "@tiptap/extension-underline": "^3.24.0",
+    "@tiptap/react": "^3.24.0",
+    "@tiptap/starter-kit": "^3.24.0",
+    "bcryptjs": "^3.0.3",
+    "framer-motion": "^12.40.0",
+
+    "katex": "^0.17.0",
+    "marked": "^18.0.5",
+    "mermaid": "^11.15.0",
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-force-graph-2d": "^1.29.1",
+    "swiper": "^12.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "prisma": "^5.22.0",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

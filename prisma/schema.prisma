@@ -1,0 +1,126 @@
+// Digital Garden — Prisma Schema
+// Version: 3.0-cloud
+// Database: PostgreSQL (production/cloud) | SQLite (local dev fallback)
+//
+// Cloud Migration (Phase 1): provider changed from sqlite → postgresql
+// Local SQLite fallback: change provider back to "sqlite" for local dev
+//
+// Design authority: MVP_v0.1.md §5.1
+// Architecture reference: ARCHITECTURE.md §5
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// User — 多用户账户
+// ─────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  displayName  String   @default("")
+  avatar       String?  // URL or data URL for avatar image
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  entries      Entry[]
+}
+
+// ─────────────────────────────────────────────
+// Entry — 数字花园中最核心的内容实体
+// ─────────────────────────────────────────────
+// 每一条 Entry 代表用户的一次记录：
+// 回忆、想法、情绪、梦境、故事、学习
+//
+// 双存储策略 (ARCHITECTURE.md §9):
+//   content   = TipTap JSON → 编辑器精确还原
+//   contentMd = Markdown     → 全文搜索 + 未来导出
+
+model Entry {
+  id        String    @id @default(cuid())
+  title     String
+  slug      String    @unique
+  type      String    // EntryType: Memory | Thought | Emotion | Dream | Story | Learning
+  content   String    // TipTap JSON — 编辑器读写的主字段
+  contentMd String    // Markdown — 搜索 + 导出
+  excerpt   String?   // 纯文本摘要，列表卡片用（取 contentMd 前 200 字）
+  isPrivate Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags      EntryTag[]
+  assets    Asset[]
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([userId, updatedAt])
+}
+
+// EntryType 有效值（应用层校验，兼容 PostgreSQL 与 SQLite）:
+//   Memory   — 回忆
+//   Thought  — 想法
+//   Emotion  — 情绪
+//   Dream    — 梦境
+//   Story    — 故事
+//   Learning — 学习记录
+
+// ─────────────────────────────────────────────
+// Tag — 轻量分类
+// ─────────────────────────────────────────────
+// Tag 不承担复杂结构，只负责检索和整理。
+// 用户自由创建，不预设分类体系。
+// 通过 EntryTag 与 Entry 形成多对多关系。
+
+model Tag {
+  id      String     @id @default(cuid())
+  name    String     @unique
+  slug    String     @unique
+  entries EntryTag[]
+}
+
+// ─────────────────────────────────────────────
+// EntryTag — 多对多关联表
+// ─────────────────────────────────────────────
+// 显式定义关联表以便：
+//   1. 精确控制级联删除行为
+//   2. 未来可扩展关联元数据（如 taggedAt）
+
+model EntryTag {
+  entry   Entry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entryId String
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId   String
+
+  @@id([entryId, tagId])
+}
+
+// ─────────────────────────────────────────────
+// Asset — 附件实体
+// ─────────────────────────────────────────────
+// 与 Entry 解耦，便于未来扩展相册、附件管理。
+// MVP 阶段仅支持图片（粘贴 / 上传）。
+// entryId 可为空 → 支持独立上传，后续再关联 Entry。
+// Entry 删除时 Asset 保留（onDelete: SetNull）。
+
+model Asset {
+  id        String   @id @default(cuid())
+  url       String
+  fileName  String
+  fileSize  Int
+  mimeType  String
+  entryId   String?
+  entry     Entry?   @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([entryId])
+}

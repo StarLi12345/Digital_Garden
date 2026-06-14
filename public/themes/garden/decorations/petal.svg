@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32">
+  <path d="M12 2 C17 8 21 16 17 22 C14 26 10 26 7 22 C3 16 7 8 12 2Z" fill="rgba(255,183,197,0.85)" />
+  <path d="M12 3 C16 8 19 15 16 20 C14 23 10 23 8 20 C5 15 8 8 12 3Z" fill="rgba(255,200,210,0.4)" />
+  <line x1="12" y1="4" x2="12" y2="16" stroke="rgba(200,150,160,0.3)" stroke-width="0.5" />
+</svg>

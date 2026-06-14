@@ -1,0 +1,1075 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Digital Garden — Design Tokens + 4 Themes
+   ============================================================
+   参考博客园优秀设计：Silence / Geek / awescnb
+   核心原则：阅读优先 · 留白节奏 · 微阴影 · 克制配色
+   ============================================================ */
+
+/* ═══════════════════════════════════════════════════════
+   Theme: Garden — 玻璃温室 · 晨光植物 · 轻奢自然
+   Design tokens v2 — glassmorphism + botanical minimalism
+   ═══════════════════════════════════════════════════════ */
+:root, [data-theme="garden"] {
+  /* ── Core palette ─────────────────────────────── */
+  --color-background:   #f7f4ef;
+  --color-foreground:   #3b382b;
+  --color-card:         rgba(255,255,255,0.65);
+  --color-card-hover:   rgba(255,255,255,0.80);
+  --color-primary:      #7a9668;
+  --color-primary-hover:#6a8660;
+  --color-secondary:    #ede6d8;
+  --color-secondary-hover:#e5ddcc;
+  --color-border:       rgba(180,172,155,0.28);
+  --color-muted:        #f4f0e7;
+  --color-muted-foreground:#6e6a58;
+  --color-accent:       #c89860;
+  --color-accent-hover: #b88850;
+  --color-ring:         rgba(122,150,104,0.22);
+
+  /* ── Navigation ────────────────────────────────── */
+  --color-nav-bg:       rgba(247,244,239,0.78);
+  --color-nav-border:   rgba(180,172,155,0.2);
+
+  /* ── Special backgrounds ───────────────────────── */
+  --color-callout-bg:   #faf6ed;
+  --color-code-bg:      #f4f0e7;
+
+  /* ── Glass surface tokens ──────────────────────── */
+  --glass-bg:           rgba(255,255,255,0.45);
+  --glass-bg-hover:     rgba(255,255,255,0.65);
+  --glass-border:       rgba(255,255,255,0.30);
+  --glass-blur:         12px;
+  --glass-shadow:       0 2px 20px rgba(107,130,86,0.05), 0 1px 3px rgba(0,0,0,0.02);
+
+  /* ── Soft shadow ───────────────────────────────── */
+  --shadow-card:        0 1px 3px rgba(0,0,0,0.02), 0 4px 14px rgba(122,150,104,0.04);
+  --shadow-card-hover:  0 2px 5px rgba(0,0,0,0.03), 0 8px 24px rgba(122,150,104,0.06);
+  --shadow-lighter:     0 1px 2px rgba(0,0,0,0.01);
+  --shadow-base:        0 2px 10px rgba(0,0,0,0.03);
+
+  /* ── Glow ──────────────────────────────────────── */
+  --glow-primary:       0 0 16px rgba(184,200,160,0.2);
+  --glow-accent:        0 0 12px rgba(200,152,96,0.14);
+
+  /* ── Radius ────────────────────────────────────── */
+  --radius-sm:          6px;
+  --radius-base:        10px;
+  --radius-md:          14px;
+  --radius-lg:          20px;
+}
+
+/* ── Garden Dark Mode ─────────────────────────────── */
+.dark[data-theme="garden"], .dark:not([data-theme]), .dark {
+  --color-background:   #1c1a16;
+  --color-foreground:   #e8e3d8;
+  --color-card:         rgba(40,37,32,0.72);
+  --color-card-hover:   rgba(50,46,40,0.82);
+  --color-primary:      #9ab882;
+  --color-primary-hover:#aac692;
+  --color-secondary:    #36332c;
+  --color-secondary-hover:#423e36;
+  --color-border:       rgba(80,76,68,0.32);
+  --color-muted:        #2a2722;
+  --color-muted-foreground:#b0a898;
+  --color-accent:       #d8a878;
+  --color-accent-hover:#e8b888;
+  --color-ring:         rgba(154,184,130,0.22);
+  --color-nav-bg:       rgba(28,26,22,0.82);
+  --color-nav-border:   rgba(80,76,68,0.22);
+  --color-callout-bg:   #2a2418;
+  --color-code-bg:      #2a2722;
+
+  --glass-bg:           rgba(40,37,32,0.55);
+  --glass-bg-hover:     rgba(52,48,42,0.72);
+  --glass-border:       rgba(255,255,255,0.05);
+  --glass-blur:         12px;
+  --glass-shadow:       0 2px 20px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+
+  --shadow-card:        0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.10);
+  --shadow-card-hover:  0 2px 5px rgba(0,0,0,0.08), 0 8px 26px rgba(0,0,0,0.13);
+  --shadow-lighter:     0 1px 2px rgba(0,0,0,0.04);
+  --shadow-base:        0 2px 10px rgba(0,0,0,0.08);
+
+  --glow-primary:       0 0 18px rgba(154,184,130,0.18);
+  --glow-accent:        0 0 14px rgba(216,168,120,0.12);
+}
+
+/* ── Theme: Moonlight ──────────────────────────────────── */
+[data-theme="starry"] {
+  --color-background: #1a1d23;
+  --color-foreground: #d8dce3;
+  --color-card: #21242b;
+  --color-card-hover: #262930;
+  --color-primary: #c9a96e;
+  --color-primary-hover: #d4b87a;
+  --color-secondary: #2a2d35;
+  --color-secondary-hover: #30333b;
+  --color-border: #2a2d35;
+  --color-muted: #24272e;
+  --color-muted-foreground: #8b8f98;
+  --color-accent: #c9a96e;
+  --color-accent-hover: #d4b87a;
+  --color-ring: #c9a96e40;
+  --color-nav-bg: #1a1d23f2;
+  --color-nav-border: #2a2d35;
+  --color-callout-bg: #252820;
+  --color-code-bg: #24272e;
+}
+.dark[data-theme="starry"] {
+  --color-background: #0d0e12;
+  --color-foreground: #c0c5cc;
+  --color-card: #14161b;
+  --color-card-hover: #191b20;
+  --color-border: #1e2025;
+  --color-muted: #181a1f;
+  --color-muted-foreground: #7a7e86;
+  --color-nav-bg: #0d0e12f2;
+  --color-callout-bg: #1a1a14;
+  --color-code-bg: #181a1f;
+}
+
+/* ── Theme: Sakura ─────────────────────────────────────── */
+[data-theme="sakura"] {
+  --color-background: #fdf6f8;
+  --color-foreground: #3d2e33;
+  --color-card: #ffffff;
+  --color-card-hover: #fef9fa;
+  --color-primary: #c97a8b;
+  --color-primary-hover: #b8687a;
+  --color-secondary: #f2e4e8;
+  --color-secondary-hover: #ebd8de;
+  --color-border: #f0e4e8;
+  --color-muted: #faf3f5;
+  --color-muted-foreground: #9a8088;
+  --color-accent: #b8a9c9;
+  --color-accent-hover: #a898bc;
+  --color-ring: #c97a8b40;
+  --color-nav-bg: #fffffff2;
+  --color-nav-border: #f0e4e8;
+  --color-callout-bg: #fef5f6;
+  --color-code-bg: #faf3f5;
+}
+.dark[data-theme="sakura"] {
+  --color-background: #1d1a1c;
+  --color-foreground: #e5d8dd;
+  --color-card: #242022;
+  --color-card-hover: #292527;
+  --color-primary: #d4899a;
+  --color-primary-hover: #e09aaa;
+  --color-secondary: #2d2528;
+  --color-secondary-hover: #332b2e;
+  --color-border: #2d2528;
+  --color-muted: #262124;
+  --color-muted-foreground: #a09096;
+  --color-accent: #c0b5d0;
+  --color-accent-hover: #ccc0d8;
+  --color-nav-bg: #1d1a1cf2;
+  --color-nav-border: #2d2528;
+  --color-callout-bg: #2a2022;
+  --color-code-bg: #262124;
+}
+
+/* ── Theme: Rain ───────────────────────────────────────── */
+[data-theme="rain"] {
+  --color-background: #eef2f5;
+  --color-foreground: #2e3640;
+  --color-card: #f5f7f9;
+  --color-card-hover: #f0f2f5;
+  --color-primary: #6b8d9e;
+  --color-primary-hover: #5a7d8e;
+  --color-secondary: #dde4e8;
+  --color-secondary-hover: #d0d9df;
+  --color-border: #dde4e8;
+  --color-muted: #f0f3f5;
+  --color-muted-foreground: #7a8894;
+  --color-accent: #8fa8b5;
+  --color-accent-hover: #7e9aa9;
+  --color-ring: #6b8d9e40;
+  --color-nav-bg: #f5f7f9f2;
+  --color-nav-border: #dde4e8;
+  --color-callout-bg: #f0f4f6;
+  --color-code-bg: #f0f3f5;
+}
+.dark[data-theme="rain"] {
+  --color-background: #1a1e21;
+  --color-foreground: #d0d8de;
+  --color-card: #202427;
+  --color-card-hover: #25292c;
+  --color-primary: #8aaab8;
+  --color-primary-hover: #9ab8c6;
+  --color-secondary: #272c30;
+  --color-secondary-hover: #2d3236;
+  --color-border: #272c30;
+  --color-muted: #22262a;
+  --color-muted-foreground: #8a949c;
+  --color-accent: #9ab5c0;
+  --color-accent-hover: #a8c0ca;
+  --color-nav-bg: #1a1e21f2;
+  --color-nav-border: #272c30;
+  --color-callout-bg: #1e2426;
+  --color-code-bg: #22262a;
+}
+
+/* ── Design Token System（参考 Element Plus）────────────── */
+:root {
+  /* Typography（仿 EL 六级字号） */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 0.875rem;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --reading-width: 860px;
+  --reading-line-height: 1.78;
+  --reading-font-size: var(--font-size-base);
+  --para-spacing: 1em;
+  --section-spacing: 2em;
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-mono: var(--font-geist-mono), "Consolas", "Monaco", "Courier New", monospace;
+
+  /* Border Radius（仿 EL 四级圆角）*/
+  --radius-base: 4px;
+  --radius-md: 8px;
+  --radius-round: 20px;
+  --radius-circle: 100%;
+
+  /* Box Shadow（仿 EL 四级阴影：多层叠加）*/
+  --shadow-lighter: 0 0 6px rgba(0,0,0,0.06);
+  --shadow-light: 0 0 12px rgba(0,0,0,0.08);
+  --shadow-base: 0 8px 20px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-dark: 0 16px 48px rgba(0,0,0,0.10), 0 8px 16px -8px rgba(0,0,0,0.12);
+
+  /* Spacing（仿 EL 六级间距 — 4px 基准）*/
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-base: 16px;
+  --space-md: 24px;
+  --space-lg: 32px;
+  --space-xl: 44px;
+
+  /* Z-Index（仿 EL 三级层级）*/
+  --z-base: 1;
+  --z-top: 1000;
+  --z-popper: 2000;
+
+  /* Background */
+  --garden-bg-opacity: 0.55;
+  --garden-bg-blur: 0px;
+}
+
+.dark {
+  --shadow-lighter: 0 0 6px rgba(0,0,0,0.20);
+  --shadow-light:  0 0 12px rgba(0,0,0,0.25);
+  --shadow-base:   0 8px 20px rgba(0,0,0,0.30), 0 2px 6px rgba(0,0,0,0.20);
+  --shadow-dark:   0 16px 48px rgba(0,0,0,0.40), 0 8px 16px -8px rgba(0,0,0,0.35);
+}
+
+/* ── Tailwind v4 integration ───────────────────────────── */
+@theme inline {
+  --color-background: var(--color-background);
+  --color-foreground: var(--color-foreground);
+  --color-card: var(--color-card);
+  --color-card-hover: var(--color-card-hover);
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-hover: var(--color-secondary-hover);
+  --color-border: var(--color-border);
+  --color-muted: var(--color-muted);
+  --color-muted-foreground: var(--color-muted-foreground);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-ring: var(--color-ring);
+  --color-nav-bg: var(--color-nav-bg);
+  --color-nav-border: var(--color-nav-border);
+  --radius-sm: var(--radius-base);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-round);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* ═══════════════════════════════════════════════════════
+   BASE — 参考博客园最佳实践
+   ═══════════════════════════════════════════════════════ */
+
+html {
+  overflow-x: hidden;
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary) transparent;
+}
+
+/* WebKit scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-hover, var(--color-primary));
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--ui-font-family, var(--font-sans));
+  font-size: var(--ui-font-size, var(--reading-font-size));
+  font-weight: var(--ui-font-weight, 400);
+  font-style: var(--ui-font-style, normal);
+  line-height: var(--ui-line-height, var(--reading-line-height));
+  letter-spacing: var(--ui-letter-spacing, 0px);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUDIO GLOW RING — 音频响应轮廓光圈
+   ═══════════════════════════════════════════════════════ */
+
+@keyframes glowHueShift {
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+.garden-music-glow::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid var(--color-primary);
+  box-shadow:
+    0 0 6px 1px var(--color-primary),
+    0 0 14px 3px var(--color-accent),
+    inset 0 0 6px 1px var(--color-primary);
+  animation:
+    glowHueShift calc(4s / var(--glow-speed, 1)) linear infinite,
+    glowPulse calc(1.5s / var(--glow-speed, 1)) ease-in-out infinite;
+  opacity: var(--glow-opacity, 0.6);
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — 移动端适配
+   ═══════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .reading-container { padding-left: 0.8em; padding-right: 0.8em; }
+  .garden-editor-area .ProseMirror { padding: 1em 0.8em; }
+  aside { display: none !important; }
+  .garden-accordion-body .px-4 { padding-left: 0.4em; padding-right: 0.4em; }
+  /* Mobile nav: hide text labels, show icons only */
+  .garden-nav .nav-label { display: none; }
+  .garden-card { border-radius: var(--radius-base); }
+}
+/* Very small screens (< 400px) */
+@media (max-width: 400px) {
+  .reading-container { padding-left: 0.5em; padding-right: 0.5em; }
+  .garden-editor-area .ProseMirror { padding: 0.8em 0.5em; font-size: var(--editor-font-size, 14px); }
+  .garden-nav { padding-left: 0.5em; padding-right: 0.5em; }
+}
+
+/* ── Background system (handled by BackgroundProvider component) ── */
+
+/* ── Utility ───────────────────────────────────────────── */
+.interactive { transition: all 0.15s ease-out; }
+.interactive:hover { transition: all 0.15s ease-out; }
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TYPOGRAPHY PROSE — 参考博客园阅读体验
+   ═══════════════════════════════════════════════════════ */
+
+.prose {
+  font-family: var(--ui-font-family, var(--font-sans));
+  font-size: var(--reading-font-size);
+  line-height: var(--ui-line-height, var(--reading-line-height));
+  color: var(--color-foreground);
+}
+
+/* 段落间距 = 1em（博客园核心节奏） */
+.prose p {
+  margin-top: 0;
+  margin-bottom: var(--ui-para-spacing, var(--para-spacing));
+}
+
+/* 标题 */
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5 {
+  color: var(--color-foreground);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.prose h1 { font-size: 1.8em;  margin-top: 2em;   margin-bottom: 0.7em; }
+.prose h2 { font-size: 1.4em;  margin-top: 1.8em; margin-bottom: 0.6em; }
+.prose h3 { font-size: 1.15em; margin-top: 1.4em; margin-bottom: 0.5em; }
+.prose h4 { font-size: 1.05em; margin-top: 1.2em; margin-bottom: 0.4em; }
+.prose h5 { font-size: 0.95em; margin-top: 1em;   margin-bottom: 0.3em; }
+
+/* ── Heading anchor link (hover to reveal) ── */
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5 {
+  position: relative;
+}
+.prose .heading-anchor {
+  position: absolute;
+  left: -1.2em;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  color: var(--color-muted-foreground);
+  font-size: 0.8em;
+  font-weight: 400;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+  padding: 0 0.3em;
+}
+.prose h1:hover .heading-anchor,
+.prose h2:hover .heading-anchor,
+.prose h3:hover .heading-anchor,
+.prose h4:hover .heading-anchor,
+.prose h5:hover .heading-anchor {
+  opacity: 1;
+}
+.prose .heading-anchor:hover {
+  color: var(--color-primary);
+}
+
+/* ── 列表（飞书式：左侧引导线 + 清晰层次）── */
+.prose ul, .prose ol,
+.ProseMirror ul:not([data-type="taskList"]),
+.ProseMirror ol {
+  margin-top: 0.6em;
+  margin-bottom: 0.6em;
+  padding-left: 0;
+  list-style-position: outside;
+  /* 左侧引导线 */
+  border-left: 2px solid var(--color-border);
+  padding-left: 1.2em;
+}
+
+.prose li,
+.ProseMirror li {
+  margin-bottom: 0.25em;
+  padding-left: 0.4em;
+}
+
+.prose li > p,
+.ProseMirror li > p {
+  margin-bottom: 0;
+  display: inline;
+}
+
+/* ── 一级列表 ──────────────────────────────────── */
+.prose ul,
+.ProseMirror ul:not([data-type="taskList"]) {
+  list-style-type: disc;
+}
+.prose ol,
+.ProseMirror ol {
+  list-style-type: decimal;
+}
+
+/* ── 二级嵌套有序 → a b c ──────────────────────── */
+.prose ol ol,
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+/* ── 二级嵌套无序 → circle ───────────────────── */
+.prose ul ul,
+.ProseMirror ul ul {
+  list-style-type: circle;
+}
+
+/* ── 三级嵌套有序 → i ii iii ──────────────────── */
+.prose ol ol ol,
+.ProseMirror ol ol ol {
+  list-style-type: lower-roman;
+}
+/* ── 三级嵌套无序 → square ────────────────────── */
+.prose ul ul ul,
+.ProseMirror ul ul ul {
+  list-style-type: square;
+}
+
+/* ── 混合嵌套 ──────────────────────────────────── */
+.prose ol ul,
+.ProseMirror ol ul {
+  list-style-type: circle;
+}
+.prose ul ol,
+.ProseMirror ul ol {
+  list-style-type: decimal;
+}
+
+/* 引用块 — 博客园经典左侧边框风格 */
+.prose blockquote, .ProseMirror blockquote {
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-muted);
+  padding: 0.8em 1em;
+  margin: var(--para-spacing) 0;
+  color: var(--color-muted-foreground);
+  font-style: normal;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.prose blockquote > :first-child,
+.ProseMirror blockquote > :first-child { margin-top: 0; }
+.prose blockquote > :last-child,
+.ProseMirror blockquote > :last-child { margin-bottom: 0; }
+
+/* 代码块 — 博客园风格：浅灰背景 + 圆角 */
+.prose pre, .ProseMirror pre {
+  background: var(--color-code-bg);
+  border-radius: var(--radius-md);
+  padding: 1em 1.2em;
+  margin: var(--para-spacing) 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.55;
+  border: 1px solid var(--color-border);
+  position: relative;
+}
+.prose pre code, .ProseMirror pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--color-foreground);
+}
+
+/* 行内代码 */
+.prose code, .ProseMirror code {
+  background: var(--color-code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  color: var(--color-primary);
+}
+
+/* 链接 */
+.prose a {
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-primary);
+  transition: all 0.15s;
+}
+.prose a:hover {
+  color: var(--color-primary-hover);
+  border-bottom-color: var(--color-primary-hover);
+}
+
+/* 图片 */
+.prose img, .ProseMirror img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: var(--para-spacing) 0;
+  cursor: zoom-in;
+  transition: box-shadow 0.2s;
+}
+.prose img:hover, .ProseMirror img:hover {
+  box-shadow: var(--card-shadow-hover);
+}
+
+/* 分割线 */
+.prose hr, .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 2em 0;
+}
+
+/* 表格 */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--para-spacing) 0;
+  font-size: 0.92em;
+}
+.prose th, .prose td {
+  border: 1px solid var(--color-border);
+  padding: 0.5em 0.8em;
+  text-align: left;
+}
+.prose th {
+  background: var(--color-muted);
+  font-weight: 600;
+}
+
+/* ── Callout ───────────────────────────────────────────── */
+.ProseMirror [data-type="callout"],
+.prose .callout {
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-callout-bg);
+  padding: 0.8em 1em;
+  border-radius: var(--radius-md);
+  margin: var(--para-spacing) 0;
+  color: var(--color-foreground);
+}
+.ProseMirror [data-type="callout"] > *:first-child,
+.prose .callout > *:first-child { margin-top: 0; }
+.ProseMirror [data-type="callout"] > *:last-child,
+.prose .callout > *:last-child { margin-bottom: 0; }
+
+/* ── Code Block: language label + copy button ─────────── */
+.code-block-wrapper {
+  position: relative;
+  margin: var(--para-spacing) 0;
+}
+.code-block-wrapper .code-lang-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.2em 0.6em;
+  font-size: 0.7em;
+  color: var(--color-muted-foreground);
+  background: var(--color-border);
+  border-radius: 0 var(--radius-md) 0 var(--radius-sm);
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+}
+.code-block-wrapper .code-copy-btn {
+  position: absolute;
+  top: 0.35em;
+  right: 0.35em;
+  padding: 0.2em 0.5em;
+  font-size: 0.7em;
+  color: var(--color-muted-foreground);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.code-block-wrapper:hover .code-copy-btn {
+  opacity: 1;
+}
+
+/* ── Image Lightbox ────────────────────────────────────── */
+.garden-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  animation: lbFadeIn 0.2s ease;
+}
+.garden-lightbox img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 4px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+.garden-lightbox .lb-close {
+  position: absolute;
+  top: 1em;
+  right: 1em;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.garden-lightbox .lb-close:hover { background: rgba(255,255,255,0.25); }
+
+@keyframes lbFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   CARDS — 博客园风格微阴影卡片
+   ═══════════════════════════════════════════════════════ */
+
+.garden-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-card, var(--shadow-lighter));
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+.garden-card:hover {
+  box-shadow: var(--shadow-card-hover, var(--shadow-base));
+  transform: translateY(-1px);
+}
+
+/* Garden theme: glassmorphism cards */
+[data-theme="garden"] .garden-card {
+  backdrop-filter: blur(var(--glass-blur, 14px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 14px));
+}
+
+/* ═══════════════════════════════════════════════════════
+   SECTION SPACING — 基于 4px 基准
+   ═══════════════════════════════════════════════════════ */
+
+section {
+  margin-bottom: var(--ui-block-spacing, var(--space-md));
+}
+
+/* ═══════════════════════════════════════════════════════
+   ACCORDION — 仿 Layui 折叠面板 height 过渡
+   ═══════════════════════════════════════════════════════ */
+
+.garden-accordion-body {
+  overflow: hidden;
+  transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.25s ease;
+}
+.garden-accordion-body.open { max-height: 3000px; opacity: 1; }
+.garden-accordion-body.closed { max-height: 0; opacity: 0; }
+
+/* ═══════════════════════════════════════════════════════
+   FOCUS RING — 仿 EL 聚焦态
+   ═══════════════════════════════════════════════════════ */
+
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-base);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RANGE SLIDERS — 原生拖动（GardenSlider 组件管理样式）
+   ═══════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════
+   SELECTION
+   ═══════════════════════════════════════════════════════ */
+
+::selection { background-color: var(--color-primary); color: #ffffff; }
+
+/* ═══════════════════════════════════════════════════════
+   RUNTIME TIME/WEATHER FILTER
+   ═══════════════════════════════════════════════════════ */
+
+.runtime-tint {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  display: var(--rt-tint-display, none);
+  background: var(--rt-tint-color, transparent);
+  transition: background 2s ease;
+}
+
+/* ═══════════════════════════════════════════════════════
+   EDITOR — ProseMirror 样式
+   ═══════════════════════════════════════════════════════ */
+
+.ProseMirror {
+  outline: none;
+  position: relative;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-muted-foreground);
+  pointer-events: none;
+  height: 0;
+}
+
+/* ── Block drag handle (⋮⋮) ──────────────────────────── */
+.ProseMirror .block-drag-handle {
+  display: none;
+  position: absolute;
+  left: -28px;
+  top: 4px;
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  line-height: 22px;
+  text-align: center;
+  color: var(--color-muted-foreground);
+  cursor: grab;
+  border-radius: 3px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+  user-select: none;
+}
+.ProseMirror .block-drag-handle:hover { opacity: 1; background: var(--color-muted); }
+.ProseMirror p:hover > .block-drag-handle,
+.ProseMirror h1:hover > .block-drag-handle,
+.ProseMirror h2:hover > .block-drag-handle,
+.ProseMirror h3:hover > .block-drag-handle,
+.ProseMirror ul:hover > .block-drag-handle,
+.ProseMirror ol:hover > .block-drag-handle,
+.ProseMirror blockquote:hover > .block-drag-handle,
+.ProseMirror pre:hover > .block-drag-handle,
+.ProseMirror div[data-type]:hover > .block-drag-handle { display: flex; align-items: center; justify-content: center; }
+
+/* Editor: container uses .garden-editor-area for boundary styling */
+
+/* Editor media */
+.ProseMirror video, .ProseMirror audio {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: var(--para-spacing) 0;
+}
+
+/* Wiki internal links */
+a[href^="/entry/"] {
+  color: var(--color-primary) !important;
+  text-decoration: none !important;
+  border-bottom: 1px dashed var(--color-primary) !important;
+}
+a[href^="/entry/"]:hover {
+  color: var(--color-primary-hover) !important;
+  border-bottom-style: solid !important;
+}
+
+/* Inline highlight — 博客园风格彩色强调 */
+.inline-highlight {
+  font-weight: 600;
+  padding: 0.05em 0;
+  border-radius: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   NAV BAR BACKGROUND (导航栏背景纹理)
+   ═══════════════════════════════════════════════════════ */
+
+nav.garden-nav {
+  position: relative;
+}
+nav.garden-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--garden-topbar-bg, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: -1;
+  mask-image: linear-gradient(to right, transparent 5%, black 20%, black 80%, transparent 95%);
+  -webkit-mask-image: linear-gradient(to right, transparent 5%, black 20%, black 80%, transparent 95%);
+}
+
+/* ═══════════════════════════════════════════════════════
+   READING WIDTH CONTAINER — 博客园式窄阅读栏
+   ═══════════════════════════════════════════════════════ */
+
+.reading-container {
+  max-width: var(--reading-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5em;
+  padding-right: 1.5em;
+}
+
+/* ── TipTap Task List (任务清单) ───────────────────── */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4em;
+}
+.ProseMirror ul[data-type="taskList"] li label {
+  flex-shrink: 0;
+  margin-top: 0.15em;
+  cursor: pointer;
+}
+.ProseMirror ul[data-type="taskList"] li label input[type="checkbox"] {
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
+  text-decoration: line-through;
+  color: var(--color-muted-foreground);
+}
+
+/* Rendering mode (non-editable) */
+[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4em;
+}
+[data-type="taskItem"] > label {
+  flex-shrink: 0;
+  margin-top: 0.15em;
+}
+[data-type="taskItem"] > div {
+  flex: 1;
+}
+
+/* ── Images in editor ────────────────────────────── */
+.ProseMirror img,
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 0.5em 0;
+  display: block;
+}
+
+/* ── TipTap Highlight (内联高亮) ────────────────────── */
+.ProseMirror mark {
+  border-radius: 2px;
+  padding: 0.05em 0.15em;
+}
+
+/* ── Avatar hover spin（借鉴 paimom）────────────────── */
+.avatar-spin:hover {
+  animation: avatarSpin 0.6s ease-in-out;
+}
+@keyframes avatarSpin {
+  0%   { transform: rotate(0deg); }
+  25%  { transform: rotate(15deg); }
+  75%  { transform: rotate(-15deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* ── Live2D: canvas needs pointer-events for drag+wheel; tips overlay stay above ── */
+#waifu-tips {
+  pointer-events: none !important;
+}
+
+/* ── Garden theme: interactive element refinements ─── */
+[data-theme="garden"] .garden-nav {
+  backdrop-filter: blur(var(--glass-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 12px));
+}
+[data-theme="garden"] button.bg-primary:not(.garden-card *) {
+  box-shadow: var(--glow-primary);
+  transition: box-shadow 0.3s ease;
+}
+[data-theme="garden"] button.bg-primary:hover:not(.garden-card *) {
+  box-shadow: 0 0 22px rgba(184,200,160,0.30);
+}
+[data-theme="garden"] .garden-music-glow {
+  box-shadow: 0 0 20px rgba(184,200,160,0.25), 0 0 4px rgba(200,160,100,0.12);
+}
+[data-theme="garden"] input:focus,
+[data-theme="garden"] textarea:focus,
+[data-theme="garden"] select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-ring);
+  outline: none;
+}
+[data-theme="garden"] ::selection {
+  background: rgba(154,184,130,0.2);
+  color: var(--color-foreground);
+}
+[data-theme="garden"] .reading-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Garden theme: empty states ──────────────────── */
+[data-theme="garden"] .garden-empty {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255,248,225,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(184,200,160,0.06) 0%, transparent 40%);
+}
+[data-theme="garden"] .garden-empty::before {
+  content: "🌱";
+  font-size: 3rem;
+  display: block;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+/* ── Garden theme: background handled by GardenBackground component */
+
+/* ── Card hover lift ──────────────────────────────── */
+
+/* ── Rightside toolbar entrance ──────────────────── */
+.animate-toast-in {
+  animation: toastIn 0.2s ease-out;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: scale(0.8) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DAYTIME DYNAMIC THEME — 昼夜动态主题
+   ═══════════════════════════════════════════════════════ */
+
+/* Daytime overlay — subtle sky-tinted gradient that shifts with time */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    var(--daytime-sky-top, transparent) 0%,
+    var(--daytime-sky-bottom, transparent) 100%
+  );
+  opacity: var(--daytime-overlay-opacity, 0);
+  transition: opacity 120s linear;
+}
+
+/* Warmth filter — smooth transition applied to body */
+body {
+  transition: filter 180s ease-in-out;
+}
+
+/* ── Lazy image blur-in ──────────────────────────── */
+img[data-lazy-src]:not(.loaded) {
+  filter: blur(10px);
+  transition: filter 0.3s ease;
+}
+img[data-lazy-src].loaded {
+  filter: blur(0);
+}
+
+/* ── Footer enhancement ──────────────────────────── */
+.garden-footer {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-card);
+}
+.garden-footer .footer-quote {
+  font-size: 0.875rem;
+  color: var(--color-foreground);
+  font-style: italic;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Login page background zoom animation ────────── */
+@keyframes loginBgZoom {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+.animate-login-bg-zoom {
+  animation: loginBgZoom 20s ease-in-out infinite;
+}
+
+/* ── Chat page: hide global footer ──────────────── */
+body:has([data-page="chat"]) .garden-footer {
+  display: none;
+}
