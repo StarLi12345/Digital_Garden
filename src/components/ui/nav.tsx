@@ -135,7 +135,7 @@ export function Nav() {
 
   return (
     <div className="border-b border-nav-border bg-nav-bg backdrop-blur-sm">
-      <nav className="garden-nav mx-auto flex h-14 max-w-4xl items-center justify-between px-3 sm:px-6">
+      <nav className="garden-nav mx-auto flex h-14 max-w-5xl items-center justify-between px-3 sm:px-6">
         <div className="flex items-center gap-5">
           <Link
             href="/"

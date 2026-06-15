@@ -268,8 +268,8 @@ export function MusicPlayer() {
           }}
           className={`w-[42px] h-[42px] rounded-full flex items-center justify-center interactive shadow-lg text-base border
             ${playing
-              ? "border-primary/40 bg-primary/15 text-primary garden-music-glow"
-              : "border-border/60 bg-card/90 backdrop-blur text-foreground/70 hover:text-foreground hover:border-border"
+              ? "border-primary/60 bg-primary/20 text-primary garden-music-glow"
+              : "border-border/85 bg-card/95 backdrop-blur text-foreground/90 hover:text-foreground hover:border-border"
             }
           `}
           title={enabled ? "展开播放器" : "开启音乐"}

@@ -415,7 +415,7 @@ export default function EntryPage({ params }: EntryPageProps) {
     <div className="flex h-[calc(100vh-3.5rem)]" onKeyDown={handleKeyDown}>
       {/* Main editor area — like /plant */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto py-12 px-6" style={{ maxWidth: "920px" }}>
+        <div className="mx-auto py-12 px-6" style={{ maxWidth: "1020px" }}>
           {/* Breadcrumb */}
           <Breadcrumb items={[{ label: "花园", href: "/garden" }, { label: entry.title }]} />
 

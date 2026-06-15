@@ -9,7 +9,7 @@ import { AudioProvider } from "@/components/ui/audio-provider";
 import { TopBarContainer } from "@/components/ui/topbar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AmbientProvider } from "@/components/ui/ambient-provider";
-import { ThemeRuntimeProvider } from "@/components/ui/theme-runtime-provider";
+// (theme runtime removed)
 import { UIPrefsProvider } from "@/components/ui/ui-prefs-provider";
 import { CompanionWidget } from "@/components/ui/companion";
 import { RightsideToolbar } from "@/components/ui/rightside-toolbar";
@@ -75,7 +75,6 @@ export default async function RootLayout({
           <ToastProvider>
           <AudioProvider>
           <UIPrefsProvider />
-          <ThemeRuntimeProvider />
           <AmbientProvider />
           <BackgroundProvider />
           <TopBarContainer>

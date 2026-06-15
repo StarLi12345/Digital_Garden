@@ -9,7 +9,7 @@ import { BACKGROUND_CATEGORIES, getStoredBackground, setStoredBackground } from 
 import { THEMES, getStoredTheme, setStoredTheme, applyThemeBindings, getThemeById } from "@/lib/themes";
 import { getTopbarMode, setTopbarMode, type TopbarMode } from "@/lib/layout-config";
 import { getAmbientEffect, setAmbientEffect, getCursorEffect, setCursorEffect, type AmbientEffect, type CursorEffect } from "@/lib/ambient-config";
-import { getTimeEnabled, setTimeEnabled, getWeatherMode, setWeatherMode, getMockWeather, setMockWeather, type WeatherType } from "@/lib/theme-runtime";
+// (theme runtime removed)
 import { getPrefs, setPrefs, applyPrefs, resetPrefs, DEFAULT_PREFS, FONT_FAMILIES, FONT_SIZES, LINE_HEIGHTS, SPACINGS, THEME_COLOR_PRESETS, DEFAULT_MODULE_ORDER, type UIPreferences, type ModuleVisibility } from "@/lib/ui-preferences";
 import { LIVE2D_PRESETS, getLive2DConfig, setLive2DConfig, type Live2DConfig } from "@/lib/live2d-config";
 import { fetchModelManifest, type ModelManifestEntry } from "@/lib/model-registry";
@@ -830,10 +830,13 @@ function ColorPickersInline() {
 function DynamicSection() {
   const [ambient, setAmbient] = useState<AmbientEffect>("none");
   const [cursor, setCursor] = useState<CursorEffect>("none");
-  const [timeOn, setTimeOn] = useState(false);
-  const [weatherMode, setWMode] = useState<"off"|"mock">("off");
-  const [mockW, setMockW] = useState<WeatherType>("sunny");
-  useEffect(() => { setAmbient(getAmbientEffect()); setCursor(getCursorEffect()); setTimeOn(getTimeEnabled()); setWMode(getWeatherMode()); setMockW(getMockWeather()); }, []);
+  useEffect(() => {
+    const sync = () => { setAmbient(getAmbientEffect()); setCursor(getCursorEffect()); };
+    sync();
+    // Listen for theme changes → re-sync ambient effect button state
+    window.addEventListener("garden-theme-changed", sync);
+    return () => window.removeEventListener("garden-theme-changed", sync);
+  }, []);
   const pickA = (e: AmbientEffect) => { setAmbient(e); setAmbientEffect(e); window.dispatchEvent(new Event("storage")); };
   const pickC = (e: CursorEffect) => { setCursor(e); setCursorEffect(e); window.dispatchEvent(new Event("storage")); };
 
@@ -842,8 +845,8 @@ function DynamicSection() {
       <div>
         <p className="text-xs text-muted-foreground mb-1.5">环境动效</p>
         <div className="flex flex-wrap gap-1.5">
-          {(["none","petal","dust","snow","rain","geometry"] as AmbientEffect[]).map(v => {
-            const labels: Record<string,string> = { none:"❌ 无", petal:"🌸 花瓣", dust:"✨ 光尘", snow:"❄️ 飘雪", rain:"🌧 落雨", geometry:"🔷 几何" };
+          {(["none","petal","dust","snow","rain"] as AmbientEffect[]).map(v => {
+            const labels: Record<string,string> = { none:"❌ 无", petal:"🌸 樱飘", dust:"✨ 光尘", snow:"❄️ 飘雪", rain:"🌧 落雨" };
             return <button key={v} onClick={() => pickA(v)} className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${ambient===v?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{labels[v]}</button>;
           })}
         </div>
@@ -855,27 +858,6 @@ function DynamicSection() {
             const labels: Record<string,string> = { none:"❌ 无", petal:"🌸 花瓣", dust:"✨ 光尘", snow:"❄️ 雪" };
             return <button key={v} onClick={() => pickC(v)} className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${cursor===v?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{labels[v]}</button>;
           })}
-        </div>
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground mb-1.5">时间 & 天气</p>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { const n = !timeOn; setTimeOn(n); setTimeEnabled(n); }}
-            className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${timeOn?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>🕐 时间 {timeOn?"开":"关"}</button>
-          <button onClick={() => { const n: "off"|"mock" = weatherMode==="off"?"mock":"off"; setWMode(n); setWeatherMode(n); }}
-            className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${weatherMode==="mock"?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>🌤 天气 {weatherMode==="mock"?"开":"关"}</button>
-        </div>
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground mb-1.5">🌿 花园生态模式</p>
-        <div className="flex items-center gap-2">
-          <EcoToggle />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground mb-1.5">🌸 樱花飘落 (Canvas)</p>
-        <div className="flex items-center gap-2">
-          <SakuraToggle />
         </div>
       </div>
       <div>
@@ -947,48 +929,6 @@ function WeatherKeyInput() {
         </div>
       )}
     </div>
-  );
-}
-
-function EcoToggle() {
-  const [mode, setMode] = useState("standard");
-  useEffect(() => {
-    try { setMode(localStorage.getItem("garden-eco-mode") || "standard"); } catch {}
-  }, []);
-  const cycle = () => {
-    const modes = ["off", "standard", "enhanced"];
-    const idx = modes.indexOf(mode);
-    const next = modes[(idx + 1) % modes.length];
-    setMode(next);
-    try { localStorage.setItem("garden-eco-mode", next); } catch {}
-    // Notify ecosystem engine
-    try { const { getEcosystem } = require("@/ecosystem/garden-ecosystem"); getEcosystem().setMode(next as any); } catch {}
-  };
-  const labels: Record<string, string> = { off: "关闭", standard: "标准", enhanced: "增强" };
-  return (
-    <button onClick={cycle}
-      className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${mode !== "off" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
-      🌿 生态 {labels[mode]}
-    </button>
-  );
-}
-
-function SakuraToggle() {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    try { setOn(localStorage.getItem("garden-sakura") === "true"); } catch {}
-  }, []);
-  const toggle = () => {
-    const n = !on;
-    setOn(n);
-    try { localStorage.setItem("garden-sakura", String(n)); } catch {}
-    window.dispatchEvent(new CustomEvent("garden-prefs"));
-  };
-  return (
-    <button onClick={toggle}
-      className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${on?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>
-      🌸 樱飘 {on?"开":"关"}
-    </button>
   );
 }
 

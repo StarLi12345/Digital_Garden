@@ -2,7 +2,7 @@
 // Digital Garden — Ambient Effects Configuration
 // ============================================================
 
-export type AmbientEffect = "none" | "petal" | "dust" | "snow" | "rain" | "geometry";
+export type AmbientEffect = "none" | "petal" | "dust" | "snow" | "rain";
 export type CursorEffect = "none" | "petal" | "dust" | "snow";
 
 const AMBIENT_KEY = "garden-ambient-effect";

@@ -1,14 +1,13 @@
 "use client";
 
 // ============================================================
-// Digital Garden — Ambient Effects Wrapper（环境特效聚合器）
+// Digital Garden — Ambient Effects Wrapper
 // ============================================================
-// 统一管理可选环境特效：樱花飘落、CRT 扫描线
-// 通过自定义事件 "garden-prefs" 实时响应设置变更
+// Sakura petals → moved to AmbientProvider (樱飘 in env effects)
+// CRT scanline → kept here
 // ============================================================
 
 import { useState, useEffect, useCallback } from "react";
-import { SakuraPetals } from "./sakura-petals";
 import { CrtOverlay } from "./crt-overlay";
 
 function getBool(key: string, fallback: boolean): boolean {
@@ -16,12 +15,10 @@ function getBool(key: string, fallback: boolean): boolean {
 }
 
 export function AmbientEffects() {
-  const [sakuraOn, setSakuraOn] = useState(false);
   const [crtOn, setCrtOn] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const refresh = useCallback(() => {
-    setSakuraOn(getBool("garden-sakura", false));
     setCrtOn(getBool("garden-crt", false));
   }, []);
 
@@ -30,7 +27,6 @@ export function AmbientEffects() {
     setMounted(true);
   }, [refresh]);
 
-  // Listen for real-time prefs changes (from settings page)
   useEffect(() => {
     const handler = () => refresh();
     window.addEventListener("garden-prefs", handler);
@@ -40,14 +36,11 @@ export function AmbientEffects() {
   if (!mounted) return null;
 
   return (
-    <>
-      <SakuraPetals enabled={sakuraOn} density={0.5} />
-      <CrtOverlay
-        enabled={crtOn}
-        scanlineOpacity={0.06}
-        flickerIntensity={0.6}
-        curvature={false}
-      />
-    </>
+    <CrtOverlay
+      enabled={crtOn}
+      scanlineOpacity={0.06}
+      flickerIntensity={0.6}
+      curvature={false}
+    />
   );
 }

@@ -221,7 +221,7 @@
   --font-size-md: 16px;
   --font-size-lg: 18px;
   --font-size-xl: 20px;
-  --reading-width: 860px;
+  --reading-width: 1020px;
   --reading-line-height: 1.78;
   --reading-font-size: var(--font-size-base);
   --para-spacing: 1em;
@@ -300,6 +300,11 @@ html {
   /* Firefox */
   scrollbar-width: thin;
   scrollbar-color: var(--color-primary) transparent;
+  /* Prevent body background-color propagation to viewport,
+     which would otherwise cover negative-z-index background layers */
+  background-color: var(--color-background);
+  /* Native browser dark/light rendering optimizations */
+  color-scheme: light dark;
 }
 
 /* WebKit scrollbar */
@@ -320,7 +325,7 @@ html {
 
 body {
   margin: 0;
-  background-color: var(--color-background);
+  background-color: transparent;
   color: var(--color-foreground);
   font-family: var(--ui-font-family, var(--font-sans));
   font-size: var(--ui-font-size, var(--reading-font-size));
@@ -769,12 +774,7 @@ section {
    RUNTIME TIME/WEATHER FILTER
    ═══════════════════════════════════════════════════════ */
 
-.runtime-tint {
-  position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  display: var(--rt-tint-display, none);
-  background: var(--rt-tint-color, transparent);
-  transition: background 2s ease;
-}
+/* runtime-tint removed */
 
 /* ═══════════════════════════════════════════════════════
    EDITOR — ProseMirror 样式
@@ -1014,31 +1014,6 @@ nav.garden-nav::before {
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ═══════════════════════════════════════════════════════
-   DAYTIME DYNAMIC THEME — 昼夜动态主题
-   ═══════════════════════════════════════════════════════ */
-
-/* Daytime overlay — subtle sky-tinted gradient that shifts with time */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: linear-gradient(
-    180deg,
-    var(--daytime-sky-top, transparent) 0%,
-    var(--daytime-sky-bottom, transparent) 100%
-  );
-  opacity: var(--daytime-overlay-opacity, 0);
-  transition: opacity 120s linear;
-}
-
-/* Warmth filter — smooth transition applied to body */
-body {
-  transition: filter 180s ease-in-out;
-}
-
 /* ── Lazy image blur-in ──────────────────────────── */
 img[data-lazy-src]:not(.loaded) {
   filter: blur(10px);
@@ -1072,4 +1047,10 @@ img[data-lazy-src].loaded {
 /* ── Chat page: hide global footer ──────────────── */
 body:has([data-page="chat"]) .garden-footer {
   display: none;
+}
+
+/* ── Smooth theme transitions (View Transition API) ── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.3s;
 }

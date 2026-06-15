@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react";
 import { resolveBackgroundUrl } from "@/lib/backgrounds";
+import { GardenBackground } from "@/components/ui/garden-background";
 
 interface BgState {
   src: string | null;
@@ -31,13 +32,14 @@ const DEFAULT_BG = "/backgrounds/moonlight-04.jpg";
 
 function resolveBgSrc(): string {
   const stored = localStorage.getItem("garden-background");
-  // If user has explicitly picked a background path, use it
-  if (stored) return stored;
+  // If user has explicitly picked a background path, use it.
+  // Skip ephemeral blob URLs (they die on page reload) and empty strings.
+  if (stored && !stored.startsWith("blob:") && stored !== "") return stored;
   // Garden theme always shows moonlight-04.jpg
   const theme = localStorage.getItem("garden-theme") || "garden";
   if (theme === "garden") return DEFAULT_BG;
   // Other scene themes: empty → canvas scene shows through
-  return stored || "";
+  return "";
 }
 
 function getStored(): BgState {
@@ -113,6 +115,34 @@ export function BackgroundProvider() {
 
   const blurPx = bg.blur > 0 ? `${bg.blur}px` : "0px";
   const showMask = bg.maskOpacity > 0 && bg.maskColor !== "transparent";
+
+  // Garden theme → always shows moonlight-04 via optimized GardenBackground.
+  // Non-garden themes can still use moonlight-04 as a regular background overlay
+  // (configurable opacity, rendered on top of the canvas scene).
+  // This is a one-way binding: theme → background, not background → theme.
+  const currentTheme = localStorage.getItem("garden-theme") || "garden";
+  const useGardenBg = currentTheme === "garden" && bg.src === DEFAULT_BG && !bg.isVideo;
+
+  if (useGardenBg) {
+    return (
+      <>
+        <GardenBackground opacity={bg.opacity} />
+        {showMask && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: -2,
+              backgroundColor: bg.maskColor,
+              opacity: bg.maskOpacity,
+              transition: "opacity 0.3s ease",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <>

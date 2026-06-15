@@ -29,7 +29,7 @@ export const THEMES: ThemeDef[] = [
     description: "玻璃温室 · 晨光与绿植",
     background: "/backgrounds/moonlight-04.jpg",
     musicTrack: "01",
-    ambient: "petal",
+    ambient: "none",
     mode: "light",
     primaryColor: "#7a9668",
   },
@@ -115,8 +115,8 @@ export function applyThemeBindings(theme: ThemeDef) {
   } else {
     try { localStorage.setItem("garden-background", theme.background); } catch {}
   }
-  // Set ambient effect
-  try { localStorage.setItem("garden-ambient", theme.ambient); } catch {}
+  // Set ambient effect (auto-bind theme → ambient)
+  try { localStorage.setItem("garden-ambient-effect", theme.ambient); } catch {}
   // Set primary color
   try { document.documentElement.style.setProperty("--color-primary", theme.primaryColor); } catch {}
   // Clear custom text color so theme CSS takes over

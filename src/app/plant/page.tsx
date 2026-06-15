@@ -321,7 +321,7 @@ function PlantPageInner() {
 
       {/* ====== MAIN EDITOR ====== */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto py-12 px-6" style={{ maxWidth: "920px" }}>
+        <div className="mx-auto py-12 px-6" style={{ maxWidth: "1020px" }}>
           {/* Draft box link */}
           <div className="flex items-center gap-3 mb-4">
             <Link

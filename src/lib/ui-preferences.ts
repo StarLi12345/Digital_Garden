@@ -34,7 +34,7 @@ export const DEFAULT_MODULE_ORDER = [
 
 export const DEFAULT_PREFS: UIPreferences = {
   fontFamily: "var(--font-sans)",
-  fontSize: 15,
+  fontSize: 22,
   fontWeight: 400,
   fontStyle: "normal",
   lineHeight: 1.78,
