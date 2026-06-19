@@ -315,35 +315,38 @@ function PlantPageInner() {
       {/* ====== MAIN EDITOR ====== */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto py-12 px-6" style={{ maxWidth: "1200px" }}>
-          {/* Draft box link — glass toolbar */}
-          <div className="flex items-center gap-3 mb-4 garden-toolbar px-3 py-1.5">
+          {/* Draft box link — glass toolbar, wraps on mobile */}
+          <div className="flex items-center gap-2 mb-4 garden-toolbar px-2 sm:px-3 py-1.5 flex-wrap">
             <Link
               href="/drafts"
-              className="garden-ctrl-btn-muted interactive"
+              className="garden-ctrl-btn-muted interactive text-[0.6rem] sm:text-[0.688rem]"
             >
-              📋 草稿箱
+              <span className="hidden sm:inline">📋 草稿箱</span>
+              <span className="inline sm:hidden">📋</span>
               {drafts.length > 0 && (
-                <span className="bg-primary/15 text-primary text-[0.625rem] px-1.5 py-0.5 rounded-full font-medium">
+                <span className="bg-primary/15 text-primary text-[0.55rem] sm:text-[0.625rem] px-1 py-0.5 rounded-full font-medium">
                   {drafts.length}
                 </span>
               )}
             </Link>
             {currentDraftId && (
-              <span className="text-[0.625rem] text-muted-foreground/60">自动暂存中</span>
+              <span className="text-[0.55rem] sm:text-[0.625rem] text-muted-foreground/60 hidden sm:inline">自动暂存中</span>
             )}
             <button
               onClick={handleNewDraft}
-              className="garden-ctrl-btn-muted interactive"
+              className="garden-ctrl-btn-muted interactive text-[0.6rem] sm:text-[0.688rem]"
             >
-              + 新建
+              <span className="hidden sm:inline">+ 新建</span>
+              <span className="inline sm:hidden">+</span>
             </button>
-            <div className="flex-1" />
+            <div className="flex-1 hidden sm:block" />
             <button
               onClick={() => setShowSyntaxHelp(true)}
-              className="garden-ctrl-btn-muted interactive"
+              className="garden-ctrl-btn-muted interactive text-[0.6rem] sm:text-[0.688rem]"
               title="查看 Mermaid 和 LaTeX 语法帮助"
             >
-              📖 语法帮助
+              <span className="hidden sm:inline">📖 语法帮助</span>
+              <span className="inline sm:hidden">📖</span>
             </button>
           </div>
 
@@ -430,16 +433,18 @@ function PlantPageInner() {
             )}
           </div>
 
-          {/* Editor font size + Meta + Save — glass toolbar */}
+          {/* Editor font size + Meta + Save — glass toolbar, wraps on mobile */}
           <div className="mt-5 pt-4 border-t border-border space-y-3">
             <EditorFontSize />
-            <div className="flex items-center gap-3 garden-toolbar px-4 py-2">
-              <span className="text-xs text-muted-foreground shrink-0">类型</span>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 garden-toolbar px-2 sm:px-4 py-2">
+              <span className="text-[0.6rem] sm:text-xs text-muted-foreground shrink-0">类型</span>
               <TypeSelector value={form.type} onChange={handleTypeChange} />
-              <div className="flex-1" />
-              <TagAutocomplete value={form.tags} onChange={handleTagsChange} />
+              <div className="flex-1 hidden sm:block" />
+              <div className="w-full sm:w-auto sm:flex-1">
+                <TagAutocomplete value={form.tags} onChange={handleTagsChange} />
+              </div>
             </div>
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-2 sm:gap-3 pt-1">
               <button
                 onClick={() => {
                   // 暂存：手动触发一次立即保存到草稿箱

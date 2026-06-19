@@ -352,7 +352,7 @@ export default function EntryPage({ params }: EntryPageProps) {
           </section>
         )}
 
-        <div className="flex items-center gap-3 garden-toolbar px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 garden-toolbar px-2 sm:px-3 py-2">
           <button onClick={enterEdit}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover interactive">
             <span className="text-sm leading-none">✏️</span>编辑
@@ -514,16 +514,18 @@ export default function EntryPage({ params }: EntryPageProps) {
             )}
           </div>
 
-          {/* Editor font size + Meta + Save */}
+          {/* Editor font size + Meta + Save — wraps on mobile */}
           <div className="mt-5 pt-4 border-t border-border space-y-3">
             <EditorFontSize />
-            <div className="flex items-center gap-3 garden-toolbar px-4 py-2">
-              <span className="text-xs text-muted-foreground shrink-0">类型</span>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 garden-toolbar px-2 sm:px-4 py-2">
+              <span className="text-[0.6rem] sm:text-xs text-muted-foreground shrink-0">类型</span>
               <TypeSelector value={editType} onChange={setEditType} />
-              <div className="flex-1" />
-              <TagAutocomplete value={editTags} onChange={setEditTags} />
+              <div className="flex-1 hidden sm:block" />
+              <div className="w-full sm:w-auto sm:flex-1">
+                <TagAutocomplete value={editTags} onChange={setEditTags} />
+              </div>
             </div>
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-2 sm:gap-3 pt-1">
               <button
                 onClick={handleSave}
                 disabled={saving}

@@ -65,27 +65,34 @@ export function MusicPlayer() {
   const progressRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Track the global audio element
+  // Track the global audio element + sync progress via timeupdate
   useEffect(() => {
+    let audio: HTMLAudioElement | null = null;
+    let onTime: (() => void) | null = null;
+    let attempts = 0;
+    const maxAttempts = 50; // 10 seconds max
+
     const timer = setInterval(() => {
       const a = document.querySelector("audio[data-garden-audio]") as HTMLAudioElement | null;
       if (a) {
+        // Found — set initial values
+        audio = a;
         audioRef.current = a;
         setCurrentTime(a.currentTime);
         setDuration(a.duration || 0);
+        // Attach timeupdate listener for real-time updates
+        onTime = () => { setCurrentTime(a.currentTime); setDuration(a.duration || 0); };
+        a.addEventListener("timeupdate", onTime);
+        clearInterval(timer);
+      } else if (++attempts >= maxAttempts) {
         clearInterval(timer);
       }
     }, 200);
-    return () => clearInterval(timer);
-  }, [enabled, trackId]);
 
-  // Sync progress via timeupdate
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    const onTime = () => { setCurrentTime(a.currentTime); setDuration(a.duration || 0); };
-    a.addEventListener("timeupdate", onTime);
-    return () => a.removeEventListener("timeupdate", onTime);
+    return () => {
+      clearInterval(timer);
+      if (audio && onTime) audio.removeEventListener("timeupdate", onTime);
+    };
   }, [enabled, trackId]);
 
   // ── Position ───────────────────────────────────────────
