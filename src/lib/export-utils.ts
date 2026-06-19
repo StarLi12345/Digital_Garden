@@ -23,6 +23,27 @@ async function getKatex() {
 /** Escape HTML entities */
 function escapeHtml(s: string) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
+/** Convert SVG string to PNG data URI (for Word compatibility) */
+function svgToPng(svg: string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const b64 = btoa(unescape(encodeURIComponent(svg)));
+      const uri = `data:image/svg+xml;base64,${b64}`;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || 800;
+        canvas.height = img.naturalHeight || 600;
+        const ctx = canvas.getContext("2d");
+        if (ctx) { ctx.drawImage(img, 0, 0); resolve(canvas.toDataURL("image/png")); }
+        else { resolve(uri); }
+      };
+      img.onerror = () => resolve(uri); // fallback to SVG URI
+      img.src = uri;
+    } catch { resolve(""); }
+  });
+}
+
 /** Get origin for resolving relative paths */
 function getOrigin(): string {
   if (typeof window !== "undefined") return window.location.origin;
@@ -116,8 +137,10 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
             try {
               const id = "exp-" + Math.random().toString(36).slice(2, 8);
               const { svg } = await mermaid.render(id, match.code);
-              const b64 = btoa(unescape(encodeURIComponent(svg)));
-              bodyHtml = bodyHtml.replace(match.original, `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="图表" /></div>`);
+              // Try SVG→PNG via canvas for Word compatibility; fallback to SVG data URI
+              const pngUri = await svgToPng(svg);
+              bodyHtml = bodyHtml.replace(match.original,
+                `<div style="text-align:center;margin:1em 0"><img src="${pngUri}" style="max-width:100%" alt="图表" /></div>`);
             } catch { /* keep original */ }
           }
         }
