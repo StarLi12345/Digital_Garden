@@ -107,57 +107,49 @@ export function exportWord(title: string, htmlBody: string) {
   downloadBlob(doc, `${safeName(title)}.doc`, "application/msword;charset=utf-8");
 }
 
-// ── Export: PDF (via browser print → Save as PDF) ───────
+// ── Export: PDF (direct download via jsPDF) ───────────
 
-export function exportPDF(title: string, htmlBody: string) {
+export async function exportPDF(title: string, htmlBody: string) {
   const withAbsoluteImgs = absolutizeImgPaths(htmlBody);
+  const fullHtml = buildHtmlDoc(title, withAbsoluteImgs);
 
-  const doc = buildHtmlDoc(title, withAbsoluteImgs, `
-    @media print {
-      body { margin: 0; padding: 1.5em; }
-      @page { margin: 1.5cm; size: A4; }
-    }
-    body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
-  `);
+  try {
+    const { jsPDF } = await import("jspdf");
 
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    alert("请允许弹出窗口以导出 PDF");
-    return;
-  }
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-  printWindow.document.write(doc);
-  printWindow.document.close();
+    // Render the HTML to a hidden container, then into the PDF
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-9999px;top:0;width:210mm;font-family:'Microsoft YaHei','PingFang SC',sans-serif;font-size:12px;line-height:1.6;color:#222;";
+    container.innerHTML = fullHtml;
+    document.body.appendChild(container);
 
-  // Wait for all images to load, then trigger print
-  printWindow.onload = () => {
-    const imgs = printWindow.document.querySelectorAll("img");
-    let loaded = 0;
-    const total = imgs.length;
+    // Wait for images to load
+    const imgs = container.querySelectorAll("img");
+    await Promise.all(Array.from(imgs).map((img) =>
+      new Promise<void>((resolve) => {
+        if (img.complete) resolve();
+        else { img.onload = () => resolve(); img.onerror = () => resolve(); }
+      })
+    ));
+    // Extra beat for layout
+    await new Promise((r) => setTimeout(r, 300));
 
-    const tryPrint = () => {
-      // Show a brief hint then print
-      const hint = printWindow.document.createElement("div");
-      hint.style.cssText = "position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999;pointer-events:none;";
-      hint.textContent = "请在打印对话框中选择「另存为 PDF」→ 保存";
-      printWindow.document.body.appendChild(hint);
-      setTimeout(() => { hint.remove(); printWindow.print(); }, 1500);
-    };
-
-    if (total === 0) {
-      tryPrint();
-      return;
-    }
-    imgs.forEach((img) => {
-      if (img.complete) {
-        loaded++;
-        if (loaded === total) tryPrint();
-      } else {
-        img.addEventListener("load", () => { loaded++; if (loaded === total) tryPrint(); });
-        img.addEventListener("error", () => { loaded++; if (loaded === total) tryPrint(); });
-      }
+    // Use jsPDF's html() method to render
+    await doc.html(container, {
+      callback: (pdf) => {
+        pdf.save(`${safeName(title)}.pdf`);
+        document.body.removeChild(container);
+      },
+      x: 10,
+      y: 10,
+      width: 190,
+      windowWidth: 794, // A4 width in px at 96dpi
+      autoPaging: "text",
+      margin: [10, 10, 10, 10],
     });
-    // Timeout fallback after 5 seconds
-    setTimeout(() => { if (loaded < total) tryPrint(); }, 5000);
-  };
+  } catch {
+    // Fallback: download as HTML if jsPDF fails
+    downloadBlob(fullHtml, `${safeName(title)}.pdf.html`, "text/html");
+  }
 }
