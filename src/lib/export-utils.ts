@@ -70,7 +70,25 @@ function absolutizeMdPaths(md: string): string {
 
 /** Generate export-ready HTML — renders mermaid/LaTeX as SVG inline */
 export async function generateExportHtml(title: string, contentMd: string): Promise<string> {
-  let bodyHtml = marked.parse(contentMd, { async: false }) as string;
+  // ── Protect LaTeX formulas before marked.parse() ──
+  // marked treats _ * as markdown markers, corrupting formulas like x_i or \sum_{i=1}
+  const latexProtected: { placeholder: string; formula: string; display: boolean }[] = [];
+  let protectedMd = contentMd;
+
+  // Block $$...$$
+  protectedMd = protectedMd.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
+    const idx = latexProtected.length;
+    latexProtected.push({ placeholder: `%%LATEXBLOCK_${idx}%%`, formula: formula.trim(), display: true });
+    return `%%LATEXBLOCK_${idx}%%`;
+  });
+  // Inline $...$
+  protectedMd = protectedMd.replace(/\$([^$\n]+?)\$/g, (_, formula) => {
+    const idx = latexProtected.length;
+    latexProtected.push({ placeholder: `%%LATEXINLINE_${idx}%%`, formula: formula.trim(), display: false });
+    return `%%LATEXINLINE_${idx}%%`;
+  });
+
+  let bodyHtml = marked.parse(protectedMd, { async: false }) as string;
   let mermaidLoaded = false;
 
   try {
@@ -84,14 +102,9 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
       let m;
       regex.lastIndex = 0;
       while ((m = regex.exec(bodyHtml)) !== null) {
-        // Decode HTML entities that marked may have introduced
         const code = m[1]
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&amp;/g, "&")
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .trim();
+          .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
         matches.push({ original: m[0], code });
       }
       if (matches.length > 0 && !mermaidLoaded) {
@@ -111,27 +124,28 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
       }
     }
 
-    // ── Render LaTeX formulas as SVG ──
+    // ── Render LaTeX: replace placeholders with KaTeX SVG ──
     const katex = await getKatex();
     if (katex) {
-      // Block $$...$$ — render as <img> for reliable print
-      bodyHtml = bodyHtml.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula: string) => {
+      for (const lp of latexProtected) {
         try {
-          const clean = formula.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
-          const svg = katex.renderToString(clean, { throwOnError: false, displayMode: true, output: "html" });
+          const svg = katex.renderToString(lp.formula, { throwOnError: false, displayMode: lp.display, output: "html" });
           const b64 = btoa(unescape(encodeURIComponent(svg)));
-          return `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="公式" /></div>`;
-        } catch { return _; }
-      });
-      // Inline $...$
-      bodyHtml = bodyHtml.replace(/\$([^$\n]+?)\$/g, (_, formula: string) => {
-        try {
-          const clean = formula.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
-          const svg = katex.renderToString(clean, { throwOnError: false, displayMode: false, output: "html" });
-          const b64 = btoa(unescape(encodeURIComponent(svg)));
-          return `<img src="data:image/svg+xml;base64,${b64}" style="vertical-align:middle" alt="公式" />`;
-        } catch { return _; }
-      });
+          if (lp.display) {
+            bodyHtml = bodyHtml.replace(
+              `<p>${lp.placeholder}</p>`,
+              `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="公式" /></div>`
+            );
+            bodyHtml = bodyHtml.replace(lp.placeholder,
+              `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="公式" /></div>`
+            );
+          } else {
+            bodyHtml = bodyHtml.replace(lp.placeholder,
+              `<img src="data:image/svg+xml;base64,${b64}" style="vertical-align:middle" alt="公式" />`
+            );
+          }
+        } catch { /* keep placeholder text */ }
+      }
     }
   } catch { /* keep original content on error */ }
 
