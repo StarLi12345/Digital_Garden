@@ -381,9 +381,9 @@ export default function EntryPage({ params }: EntryPageProps) {
                 📝 Markdown
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    const html = generateExportHtml(entry.title, entry.contentMd);
+                    const html = await generateExportHtml(entry.title, entry.contentMd);
                     exportWord(entry.title, html);
                   } catch {}
                 }}
@@ -394,7 +394,7 @@ export default function EntryPage({ params }: EntryPageProps) {
               <button
                 onClick={async () => {
                   try {
-                    const html = generateExportHtml(entry.title, entry.contentMd);
+                    const html = await generateExportHtml(entry.title, entry.contentMd);
                     await exportPDF(entry.title, html);
                   } catch {}
                 }}

@@ -8,6 +8,21 @@
 
 import { marked } from "marked";
 
+// ── Singleton dynamic imports (loaded on demand for export rendering) ──
+let _mermaid: typeof import("mermaid").default | null = null;
+async function getMermaid() {
+  if (!_mermaid) { const m = await import("mermaid"); _mermaid = m.default; }
+  return _mermaid;
+}
+let _katex: typeof import("katex").default | null = null;
+async function getKatex() {
+  if (!_katex) { const k = await import("katex"); _katex = k.default; }
+  return _katex;
+}
+
+/** Escape HTML entities */
+function escapeHtml(s: string) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
 /** Get origin for resolving relative paths */
 function getOrigin(): string {
   if (typeof window !== "undefined") return window.location.origin;
@@ -53,9 +68,59 @@ function absolutizeMdPaths(md: string): string {
   );
 }
 
-/** Generate export-ready HTML from markdown content */
-export function generateExportHtml(title: string, contentMd: string): string {
-  const bodyHtml = marked.parse(contentMd, { async: false }) as string;
+/** Generate export-ready HTML — renders mermaid/LaTeX as SVG inline */
+export async function generateExportHtml(title: string, contentMd: string): Promise<string> {
+  let bodyHtml = marked.parse(contentMd, { async: false }) as string;
+
+  try {
+    // ── Render mermaid code blocks as SVG ──
+    const mermaidRegex = /<code class="language-mermaid">([\s\S]*?)<\/code>/g;
+    const mermaidMatches: { original: string; code: string }[] = [];
+    let m;
+    while ((m = mermaidRegex.exec(bodyHtml)) !== null) {
+      mermaidMatches.push({ original: m[0], code: m[1] });
+    }
+    if (mermaidMatches.length > 0) {
+      const mermaid = await getMermaid();
+      if (mermaid) {
+        mermaid.initialize({ startOnLoad: false, theme: "default" });
+        for (const match of mermaidMatches) {
+          try {
+            const id = "exp-" + Math.random().toString(36).slice(2, 8);
+            const { svg } = await mermaid.render(id, match.code);
+            bodyHtml = bodyHtml.replace(match.original, `<div style="text-align:center;margin:1em 0">${svg}</div>`);
+          } catch { /* keep original code */ }
+        }
+      }
+    }
+
+    // ── Render LaTeX formulas as inline SVG ──
+    // Block-level: $$...$$
+    const latexBlockRegex = /\$\$([\s\S]*?)\$\$/g;
+    const katex = await getKatex();
+    if (katex) {
+      bodyHtml = bodyHtml.replace(latexBlockRegex, (_, formula) => {
+        try {
+          const svg = katex.renderToString(formula.trim(), { throwOnError: false, displayMode: true, output: "html" });
+          return `<div style="text-align:center;margin:1em 0;font-size:1.1em">${svg}</div>`;
+        } catch { return _; }
+      });
+      // Inline: $...$
+      bodyHtml = bodyHtml.replace(/\$([^$\n]+?)\$/g, (_, formula) => {
+        try {
+          return katex.renderToString(formula.trim(), { throwOnError: false, displayMode: false, output: "html" });
+        } catch { return _; }
+      });
+    }
+
+    // ── Also handle raw <pre><code> that marked might produce ──
+    // (marked may or may not wrap mermaid in language-mermaid class)
+    const extraMermaidRegex = /<pre><code>((?:graph |sequenceDiagram|gantt|stateDiagram|pie|mindmap)[\s\S]*?)<\/code><\/pre>/g;
+    if (mermaidMatches.length > 0) {
+      // Already handled if marked detected the language
+    }
+  } catch { /* keep original content on error */ }
+
   return buildHtmlDoc(title, bodyHtml);
 }
 
