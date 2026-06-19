@@ -30,7 +30,7 @@ function setCookie(name: string, value: string) {
 
 function resolveTheme(theme: Theme): "light" | "dark" {
   if (theme === "system") {
-    if (typeof window === "undefined") return "light";
+    if (typeof window === "undefined") return "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
