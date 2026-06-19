@@ -158,10 +158,56 @@ ${htmlBody}
 
 // ── Export: Markdown ────────────────────────────────────
 
-export function exportMD(title: string, contentMd: string) {
-  // Convert relative image paths to absolute so they display in local viewers
-  const fixedMd = absolutizeMdPaths(contentMd);
-  downloadBlob(fixedMd, `${safeName(title)}.md`, "text/markdown;charset=utf-8");
+export async function exportMD(title: string, contentMd: string) {
+  let md = absolutizeMdPaths(contentMd);
+
+  try {
+    // ── Render mermaid blocks as embedded SVG images ──
+    const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
+    const mermaidMatches: { original: string; code: string }[] = [];
+    let m;
+    while ((m = mermaidRegex.exec(md)) !== null) {
+      mermaidMatches.push({ original: m[0], code: m[1] });
+    }
+    if (mermaidMatches.length > 0) {
+      const mermaid = await getMermaid();
+      if (mermaid) {
+        mermaid.initialize({ startOnLoad: false, theme: "default" });
+        for (const match of mermaidMatches) {
+          try {
+            const id = "md-" + Math.random().toString(36).slice(2, 8);
+            const { svg } = await mermaid.render(id, match.code);
+            const b64 = btoa(unescape(encodeURIComponent(svg)));
+            const imgMarkdown = `![图表](data:image/svg+xml;base64,${b64})`;
+            md = md.replace(match.original, imgMarkdown);
+          } catch { /* keep original code */ }
+        }
+      }
+    }
+
+    // ── Render LaTeX formulas as embedded SVG ──
+    const katex = await getKatex();
+    if (katex) {
+      // Block-level $$...$$
+      md = md.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
+        try {
+          const svg = katex.renderToString(formula.trim(), { throwOnError: false, displayMode: true, output: "html" });
+          const b64 = btoa(unescape(encodeURIComponent(svg)));
+          return `\n\n![公式](data:image/svg+xml;base64,${b64})\n\n`;
+        } catch { return _; }
+      });
+      // Inline $...$
+      md = md.replace(/\$([^$\n]+?)\$/g, (_, formula) => {
+        try {
+          const svg = katex.renderToString(formula.trim(), { throwOnError: false, displayMode: false, output: "html" });
+          const b64 = btoa(unescape(encodeURIComponent(svg)));
+          return `![公式](data:image/svg+xml;base64,${b64})`;
+        } catch { return _; }
+      });
+    }
+  } catch { /* keep original on error */ }
+
+  downloadBlob(md, `${safeName(title)}.md`, "text/markdown;charset=utf-8");
 }
 
 // ── Export: Word (.doc) ─────────────────────────────────

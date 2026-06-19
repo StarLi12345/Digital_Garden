@@ -367,13 +367,13 @@ export default function EntryPage({ params }: EntryPageProps) {
             </button>
             <div className="absolute bottom-full left-0 mb-1 rounded-lg border border-border bg-card shadow-lg p-1.5 min-w-[130px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
                     const parsed = JSON.parse(entry.content);
                     const freshMd = jsonToMarkdown(parsed);
-                    exportMD(entry.title, freshMd);
+                    await exportMD(entry.title, freshMd);
                   } catch {
-                    exportMD(entry.title, entry.contentMd);
+                    await exportMD(entry.title, entry.contentMd);
                   }
                 }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted interactive text-left text-foreground"
@@ -383,7 +383,9 @@ export default function EntryPage({ params }: EntryPageProps) {
               <button
                 onClick={async () => {
                   try {
-                    const html = await generateExportHtml(entry.title, entry.contentMd);
+                    const parsed = JSON.parse(entry.content);
+                    const md = jsonToMarkdown(parsed);
+                    const html = await generateExportHtml(entry.title, md || entry.contentMd);
                     exportWord(entry.title, html);
                   } catch {}
                 }}
@@ -394,7 +396,9 @@ export default function EntryPage({ params }: EntryPageProps) {
               <button
                 onClick={async () => {
                   try {
-                    const html = await generateExportHtml(entry.title, entry.contentMd);
+                    const parsed = JSON.parse(entry.content);
+                    const md = jsonToMarkdown(parsed);
+                    const html = await generateExportHtml(entry.title, md || entry.contentMd);
                     await exportPDF(entry.title, html);
                   } catch {}
                 }}

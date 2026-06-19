@@ -76,6 +76,20 @@ function renderNode(node: TipTapNode): string {
     case "text":
       return renderText(node);
 
+    case "mermaid": {
+      const code = node.content
+        ?.map((c) => (c.type === "text" ? c.text || "" : ""))
+        .join("") || "";
+      return "```mermaid\n" + code + "\n```\n\n";
+    }
+
+    case "mathBlock": {
+      const formula = node.content
+        ?.map((c) => (c.type === "text" ? c.text || "" : ""))
+        .join("") || "";
+      return "$$\n" + formula + "\n$$\n\n";
+    }
+
     default:
       // Unknown node → degrade: extract plain text from children
       return node.content ? renderChildren(node) : "";
