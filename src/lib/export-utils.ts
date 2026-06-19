@@ -75,7 +75,6 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
 
   try {
     // ── Render mermaid code blocks as SVG ──
-    // Try multiple patterns since marked's output varies
     const patterns = [
       /<code class="language-mermaid">([\s\S]*?)<\/code>/g,
       /<pre><code>((?:graph |sequenceDiagram|gantt\b|stateDiagram|pie title|mindmap)[\s\S]*?)<\/code><\/pre>/g,
@@ -85,7 +84,15 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
       let m;
       regex.lastIndex = 0;
       while ((m = regex.exec(bodyHtml)) !== null) {
-        matches.push({ original: m[0], code: m[1] });
+        // Decode HTML entities that marked may have introduced
+        const code = m[1]
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .trim();
+        matches.push({ original: m[0], code });
       }
       if (matches.length > 0 && !mermaidLoaded) {
         const mermaid = await getMermaid();
@@ -96,7 +103,8 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
             try {
               const id = "exp-" + Math.random().toString(36).slice(2, 8);
               const { svg } = await mermaid.render(id, match.code);
-              bodyHtml = bodyHtml.replace(match.original, `<div style="text-align:center;margin:1em 0">${svg}</div>`);
+              const b64 = btoa(unescape(encodeURIComponent(svg)));
+              bodyHtml = bodyHtml.replace(match.original, `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="图表" /></div>`);
             } catch { /* keep original */ }
           }
         }
@@ -106,19 +114,22 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
     // ── Render LaTeX formulas as SVG ──
     const katex = await getKatex();
     if (katex) {
-      // Block $$...$$ — may have HTML entities from marked
+      // Block $$...$$ — render as <img> for reliable print
       bodyHtml = bodyHtml.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula: string) => {
         try {
           const clean = formula.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
           const svg = katex.renderToString(clean, { throwOnError: false, displayMode: true, output: "html" });
-          return `<div style="text-align:center;margin:1em 0;font-size:1.1em">${svg}</div>`;
+          const b64 = btoa(unescape(encodeURIComponent(svg)));
+          return `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="公式" /></div>`;
         } catch { return _; }
       });
       // Inline $...$
       bodyHtml = bodyHtml.replace(/\$([^$\n]+?)\$/g, (_, formula: string) => {
         try {
           const clean = formula.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
-          return katex.renderToString(clean, { throwOnError: false, displayMode: false, output: "html" });
+          const svg = katex.renderToString(clean, { throwOnError: false, displayMode: false, output: "html" });
+          const b64 = btoa(unescape(encodeURIComponent(svg)));
+          return `<img src="data:image/svg+xml;base64,${b64}" style="vertical-align:middle" alt="公式" />`;
         } catch { return _; }
       });
     }
