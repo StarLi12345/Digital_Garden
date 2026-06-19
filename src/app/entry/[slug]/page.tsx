@@ -399,7 +399,7 @@ export default function EntryPage({ params }: EntryPageProps) {
                     const parsed = JSON.parse(entry.content);
                     const md = jsonToMarkdown(parsed);
                     const html = await generateExportHtml(entry.title, md || entry.contentMd);
-                    await exportPDF(entry.title, html);
+                    exportPDF(entry.title, html);
                   } catch {}
                 }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted interactive text-left text-foreground"

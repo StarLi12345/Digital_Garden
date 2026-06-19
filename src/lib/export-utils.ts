@@ -185,26 +185,8 @@ export async function exportMD(title: string, contentMd: string) {
       }
     }
 
-    // ── Render LaTeX formulas as embedded SVG ──
-    const katex = await getKatex();
-    if (katex) {
-      // Block-level $$...$$
-      md = md.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
-        try {
-          const svg = katex.renderToString(formula.trim(), { throwOnError: false, displayMode: true, output: "html" });
-          const b64 = btoa(unescape(encodeURIComponent(svg)));
-          return `\n\n![公式](data:image/svg+xml;base64,${b64})\n\n`;
-        } catch { return _; }
-      });
-      // Inline $...$
-      md = md.replace(/\$([^$\n]+?)\$/g, (_, formula) => {
-        try {
-          const svg = katex.renderToString(formula.trim(), { throwOnError: false, displayMode: false, output: "html" });
-          const b64 = btoa(unescape(encodeURIComponent(svg)));
-          return `![公式](data:image/svg+xml;base64,${b64})`;
-        } catch { return _; }
-      });
-    }
+    // LaTeX formulas are kept as-is ($...$ / $$...$$) in markdown.
+    // Most markdown viewers (Typora, VS Code + extensions) render them natively.
   } catch { /* keep original on error */ }
 
   downloadBlob(md, `${safeName(title)}.md`, "text/markdown;charset=utf-8");
@@ -226,49 +208,46 @@ export function exportWord(title: string, htmlBody: string) {
   downloadBlob(doc, `${safeName(title)}.doc`, "application/msword;charset=utf-8");
 }
 
-// ── Export: PDF (direct download via jsPDF) ───────────
+// ── Export: PDF (via browser print → Save as PDF) ─────
 
-export async function exportPDF(title: string, htmlBody: string) {
+export function exportPDF(title: string, htmlBody: string) {
   const withAbsoluteImgs = absolutizeImgPaths(htmlBody);
-  const fullHtml = buildHtmlDoc(title, withAbsoluteImgs);
 
-  try {
-    const { jsPDF } = await import("jspdf");
+  const doc = buildHtmlDoc(title, withAbsoluteImgs, `
+    @media print {
+      body { margin: 0; padding: 1.5em; }
+      @page { margin: 1.5cm; size: A4; }
+    }
+  `);
 
-    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
-    // Render the HTML to a hidden container, then into the PDF
-    const container = document.createElement("div");
-    container.style.cssText = "position:fixed;left:-9999px;top:0;width:210mm;font-family:'Microsoft YaHei','PingFang SC',sans-serif;font-size:12px;line-height:1.6;color:#222;";
-    container.innerHTML = fullHtml;
-    document.body.appendChild(container);
-
-    // Wait for images to load
-    const imgs = container.querySelectorAll("img");
-    await Promise.all(Array.from(imgs).map((img) =>
-      new Promise<void>((resolve) => {
-        if (img.complete) resolve();
-        else { img.onload = () => resolve(); img.onerror = () => resolve(); }
-      })
-    ));
-    // Extra beat for layout
-    await new Promise((r) => setTimeout(r, 300));
-
-    // Use jsPDF's html() method to render
-    await doc.html(container, {
-      callback: (pdf) => {
-        pdf.save(`${safeName(title)}.pdf`);
-        document.body.removeChild(container);
-      },
-      x: 10,
-      y: 10,
-      width: 190,
-      windowWidth: 794, // A4 width in px at 96dpi
-      autoPaging: "text",
-      margin: [10, 10, 10, 10],
-    });
-  } catch {
-    // Fallback: download as HTML if jsPDF fails
-    downloadBlob(fullHtml, `${safeName(title)}.pdf.html`, "text/html");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("请允许弹出窗口以导出 PDF");
+    return;
   }
+  printWindow.document.write(doc);
+  printWindow.document.close();
+
+  printWindow.onload = () => {
+    // Show instruction overlay, then trigger print
+    const hint = printWindow.document.createElement("div");
+    hint.style.cssText =
+      "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a1a1a;color:#fff;padding:16px 28px;border-radius:10px;font-size:16px;z-index:9999;pointer-events:none;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);";
+    hint.innerHTML = "📄 在打印对话框中选择<b>「另存为 PDF」</b><br><span style='font-size:13px;color:#aaa;margin-top:8px;display:inline-block'>即可保存为 PDF 文件</span>";
+    printWindow.document.body.appendChild(hint);
+
+    // Pre-load images
+    const imgs = printWindow.document.querySelectorAll("img");
+    let loaded = 0;
+    const total = imgs.length;
+    const trigger = () => {
+      setTimeout(() => { hint.remove(); printWindow.print(); }, 800);
+    };
+    if (total === 0) { trigger(); return; }
+    imgs.forEach((img) => {
+      if (img.complete) { loaded++; if (loaded === total) trigger(); }
+      else { img.addEventListener("load", () => { loaded++; if (loaded === total) trigger(); }); img.addEventListener("error", () => { loaded++; if (loaded === total) trigger(); }); }
+    });
+    setTimeout(() => { if (loaded < total) trigger(); }, 5000);
+  };
 }
