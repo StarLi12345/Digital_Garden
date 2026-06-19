@@ -24,11 +24,21 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     setSidebarOpen(next);
   };
 
+  // Auto-collapse sidebar on small screens
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) setOpen(false);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)]">
-      {/* Sidebar — sticky, doesn't scroll with page */}
+      {/* Sidebar — hidden on mobile, sticky on desktop */}
       <aside
-        className={`shrink-0 sticky top-14 border-r border-border bg-card transition-all duration-300 ease-in-out flex flex-col ${
+        className={`hidden md:flex shrink-0 sticky top-14 border-r border-border bg-card transition-all duration-300 ease-in-out flex-col ${
           open ? "w-56" : "w-12"
         }`}
       >

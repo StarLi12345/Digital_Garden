@@ -152,6 +152,8 @@ export function WidgetContainer({
   // Drag handlers
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button, a, input")) return;
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragRef.current = {
       sx: e.clientX,
       sy: e.clientY,
@@ -199,7 +201,7 @@ export function WidgetContainer({
         savePos(id, snapped);
       }
     };
-    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
@@ -226,6 +228,7 @@ export function WidgetContainer({
         left: pixelPos.left,
         top: pixelPos.top,
         minWidth: 160,
+        touchAction: "none",
         transition: dragging ? "none" : "left 0.15s ease-out, top 0.15s ease-out",
       }}
       onPointerDown={onPointerDown}

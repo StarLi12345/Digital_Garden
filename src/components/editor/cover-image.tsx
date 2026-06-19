@@ -100,7 +100,7 @@ export function CoverImage({ value, onChange }: CoverImageProps) {
       <div
         ref={containerRef}
         className="relative w-full overflow-hidden rounded-lg group"
-        style={{ height: COVER_HEIGHT }}
+        style={{ maxHeight: COVER_HEIGHT, height: "auto" }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >

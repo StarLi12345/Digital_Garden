@@ -15,8 +15,8 @@ export interface ThemeDef {
   musicTrack: string;
   /** Suggested ambient effect */
   ambient: string;
-  /** Suggested color mode (light/dark) */
-  mode: "light" | "dark";
+  /** Suggested color mode (light/dark/system) */
+  mode: "light" | "dark" | "system";
   /** Primary color */
   primaryColor: string;
 }
@@ -30,7 +30,7 @@ export const THEMES: ThemeDef[] = [
     background: "/backgrounds/moonlight-04.jpg",
     musicTrack: "01",
     ambient: "none",
-    mode: "light",
+    mode: "system",
     primaryColor: "#7a9668",
   },
   {

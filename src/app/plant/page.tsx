@@ -11,14 +11,17 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { TitleInput, TypeSelector, TagInput } from "@/components/form";
+import { TitleInput, TypeSelector } from "@/components/form";
+import TagAutocomplete from "@/components/form/tag-autocomplete";
 import EditorWrapper from "@/components/editor/editor-wrapper";
 import { CoverImage } from "@/components/editor/cover-image";
 import { EditorFontSize } from "@/components/editor/editor-font-size";
 import { SourceMode } from "@/components/editor/source-mode";
+import SyntaxHelp from "@/components/editor/syntax-help";
 import type { EditorChangePayload } from "@/components/editor/tiptap-editor";
 import { createEntry } from "@/actions/entry-actions";
 import { jsonToMarkdown } from "@/lib/markdown";
+import { toast } from "@/components/ui/toast";
 
 const DRAFTS_KEY = "digital-garden-drafts";
 const DRAFT_DEBOUNCE_MS = 1000;
@@ -49,21 +52,10 @@ function loadDrafts(): Draft[] {
   } catch { return []; }
 }
 
+import { countWords, readingTimeMinutes } from "@/lib/word-count";
+
 function saveDrafts(drafts: Draft[]) {
   try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); } catch {}
-}
-
-const WORDS_PER_MINUTE = 200; // Chinese reading speed
-
-function countWords(md: string): number {
-  // Chinese: count characters; English: count words
-  const chineseChars = (md.match(/[一-鿿㐀-䶿]/g) || []).length;
-  const englishWords = (md.replace(/[一-鿿㐀-䶿]/g, " ").match(/\b\w+\b/g) || []).length;
-  return chineseChars + englishWords;
-}
-
-function readingTimeMinutes(wordCount: number): number {
-  return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE));
 }
 
 // ── Heading extraction ─────────────────────────────────
@@ -107,6 +99,7 @@ function PlantPageInner() {
   // Draft box state
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [showDrafts, setShowDrafts] = useState(false);
+  const [showSyntaxHelp, setShowSyntaxHelp] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -289,7 +282,7 @@ function PlantPageInner() {
     <div className="flex h-[calc(100vh-3.5rem)]" onKeyDown={handleKeyDown}>
       {/* ====== TOC SIDEBAR (Typora-style, auto-hide when empty) ====== */}
       {hasHeadings && (
-        <aside className="w-44 shrink-0 border-r border-border bg-card/40 overflow-y-auto p-4 hidden xl:block">
+        <aside className="w-44 shrink-0 border-r border-border bg-card overflow-y-auto p-4 hidden xl:block" style={{ backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}>
           <p className="text-[0.625rem] text-muted-foreground uppercase tracking-wider mb-3">大纲</p>
           <nav className="space-y-0.5">
             {headings.map((h, i) => (
@@ -321,12 +314,12 @@ function PlantPageInner() {
 
       {/* ====== MAIN EDITOR ====== */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto py-12 px-6" style={{ maxWidth: "1020px" }}>
-          {/* Draft box link */}
-          <div className="flex items-center gap-3 mb-4">
+        <div className="mx-auto py-12 px-6" style={{ maxWidth: "1200px" }}>
+          {/* Draft box link — glass toolbar */}
+          <div className="flex items-center gap-3 mb-4 garden-toolbar px-3 py-1.5">
             <Link
               href="/drafts"
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted interactive"
+              className="garden-ctrl-btn-muted interactive"
             >
               📋 草稿箱
               {drafts.length > 0 && (
@@ -340,9 +333,17 @@ function PlantPageInner() {
             )}
             <button
               onClick={handleNewDraft}
-              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[0.688rem] text-muted-foreground hover:text-foreground hover:bg-muted interactive"
+              className="garden-ctrl-btn-muted interactive"
             >
               + 新建
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={() => setShowSyntaxHelp(true)}
+              className="garden-ctrl-btn-muted interactive"
+              title="查看 Mermaid 和 LaTeX 语法帮助"
+            >
+              📖 语法帮助
             </button>
           </div>
 
@@ -415,6 +416,7 @@ function PlantPageInner() {
               />
             ) : (
               <EditorWrapper
+                key={currentDraftId || "new"}
                 initialContent={form.content ? (form.content as Record<string, unknown>) : undefined}
                 onChange={(p) => {
                   handleEditorChange(p);
@@ -428,14 +430,15 @@ function PlantPageInner() {
             )}
           </div>
 
-          {/* Editor font size + Meta + Save */}
+          {/* Editor font size + Meta + Save — glass toolbar */}
           <div className="mt-5 pt-4 border-t border-border space-y-3">
             <EditorFontSize />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 garden-toolbar px-4 py-2">
               <span className="text-xs text-muted-foreground shrink-0">类型</span>
               <TypeSelector value={form.type} onChange={handleTypeChange} />
+              <div className="flex-1" />
+              <TagAutocomplete value={form.tags} onChange={handleTagsChange} />
             </div>
-            <TagInput value={form.tags} onChange={handleTagsChange} />
             <div className="flex items-center gap-3 pt-1">
               <button
                 onClick={() => {
@@ -459,8 +462,9 @@ function PlantPageInner() {
                     if (!currentDraftId) setCurrentDraftId(draftId);
                     return updated;
                   });
+                  toast.success("暂存成功");
                 }}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-4 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground interactive"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground hover:bg-card-hover hover:text-foreground interactive"
               >
                 💾 暂存
               </button>
@@ -490,6 +494,9 @@ function PlantPageInner() {
           <span>{readTime} 分钟</span>
         </div>
       )}
+
+      {/* Syntax help modal */}
+      <SyntaxHelp open={showSyntaxHelp} onClose={() => setShowSyntaxHelp(false)} />
     </div>
   );
 }

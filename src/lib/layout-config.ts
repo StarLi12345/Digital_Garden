@@ -21,7 +21,7 @@ export function setTopbarMode(mode: TopbarMode) {
 
 export function getSidebarOpen(): boolean {
   if (typeof window === "undefined") return false;
-  try { return localStorage.getItem(SIDEBAR_OPEN_KEY) !== "false"; } catch { return false; }
+  try { return localStorage.getItem(SIDEBAR_OPEN_KEY) === "true"; } catch { return false; }
 }
 
 export function setSidebarOpen(open: boolean) {

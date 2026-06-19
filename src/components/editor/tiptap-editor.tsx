@@ -25,7 +25,7 @@ import { MermaidBlock } from "./mermaid-extension";
 import { MathBlock } from "./math-extension";
 import { KeyboardShortcuts } from "./shortcuts-extension";
 import { DragHandle } from "./drag-handle-extension";
-import { BlockMenu, WikiLinkPopover, MediaPrompt, NumberingPopover } from "./block-menu";
+import { BlockMenu, WikiLinkPopover, MediaPrompt, NumberingPopover, HIGHLIGHT_COLORS } from "./block-menu";
 import { jsonToMarkdown } from "@/lib/markdown";
 import { searchEntries } from "@/actions/entry-actions";
 
@@ -57,10 +57,17 @@ function FmtBtn({ editor, action, label, title }: { editor: any; action: string;
         break;
       }
       case "highlight": {
-        c.toggleHighlight({ color: "#fff176" }).run();
+        // With multicolor: true, toggleHighlight needs a matching color to remove.
+        // Better: unset any existing highlight, or apply default if none active.
+        if (editor.isActive("highlight")) {
+          c.unsetHighlight().run();
+        } else {
+          c.toggleHighlight({ color: "#fff176" }).run();
+        }
         break;
       }
       case "heading": c.toggleHeading({ level: 2 }).run(); break;
+      case "paragraph": c.setParagraph().run(); break;
       case "blockquote": c.toggleBlockquote().run(); break;
       case "bulletList": c.toggleBulletList().run(); break;
       case "orderedList": c.toggleOrderedList().run(); break;
@@ -116,6 +123,7 @@ export default function TipTapEditor({
   const [mediaPrompt, setMediaPrompt] = useState<"image" | "video" | "audio" | "link" | null>(null);
   const [wikiEntries, setWikiEntries] = useState<{ slug: string; title: string }[]>([]);
   const [numPopover, setNumPopover] = useState<{ x: number; y: number; pos: number } | null>(null);
+  const [highlightPicker, setHighlightPicker] = useState<{ x: number; y: number } | null>(null);
 
   // ── Hover "+" state ──────────────────────────────────
   const [hoverPlus, setHoverPlus] = useState<{ x: number; y: number; blockPos: number } | null>(null);
@@ -227,7 +235,9 @@ export default function TipTapEditor({
 
   const showPlus = (x: number, y: number, blockPos: number) => {
     clearHideTimer();
-    setHoverPlus({ x, y, blockPos });
+    // Clamp x so the "+" button never slides off-screen left (mobile fix)
+    const clampedX = Math.max(8, x);
+    setHoverPlus({ x: clampedX, y, blockPos });
   };
 
   const hidePlusDelayed = () => {
@@ -245,21 +255,18 @@ export default function TipTapEditor({
 
     const handleMouseMove = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Find closest block inside ProseMirror
       const block = target.closest(
         ".ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre, .ProseMirror [data-type]"
       );
       if (!block) { hidePlusDelayed(); return; }
 
       const blockRect = block.getBoundingClientRect();
-
-      // Wide trigger zone: -70px left of block to +15px inside
       const relativeX = e.clientX - blockRect.left;
       const relativeY = e.clientY - blockRect.top;
 
       if (relativeX >= -70 && relativeX <= 15 && relativeY >= 0 && relativeY <= blockRect.height) {
         showPlus(
-          blockRect.left - 36,
+          blockRect.left - 52,
           blockRect.top + blockRect.height / 2,
           0
         );
@@ -270,11 +277,46 @@ export default function TipTapEditor({
 
     const handleMouseLeave = () => hidePlusDelayed();
 
+    // Touch support: show + button on tap near left edge, persist until dismissed
+    const handleTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      if (!target) return;
+      // If tapping the + button itself, let the button's onClick handle it
+      if (hoverPlusBtnRef.current?.contains(target)) return;
+      const block = target.closest(
+        ".ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre, .ProseMirror [data-type]"
+      );
+      if (!block) { setHoverPlus(null); return; }
+      const blockRect = block.getBoundingClientRect();
+      const relativeX = touch.clientX - blockRect.left;
+      // Wider zone for mobile: tap within first 54px of block (or just outside left edge)
+      if (relativeX >= -8 && relativeX <= 54) {
+        showPlus(blockRect.left - 52, blockRect.top + blockRect.height / 2, 0);
+      } else {
+        setHoverPlus(null); // tapped elsewhere in editor → dismiss
+      }
+    };
+    // Dismiss + only if touch is OUTSIDE the editor container
+    const handleTouchDismiss = (e: TouchEvent) => {
+      const target = e.target as Node;
+      if (container.contains(target)) return; // let container handler decide
+      if (hoverPlusBtnRef.current?.contains(target)) return;
+      setHoverPlus(null);
+    };
     container.addEventListener("mousemove", handleMouseMove, { passive: true });
     container.addEventListener("mouseleave", handleMouseLeave);
+    const handleScroll = () => setHoverPlus(null);
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    document.addEventListener("touchstart", handleTouchDismiss, { passive: true });
     return () => {
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseleave", handleMouseLeave);
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("scroll", handleScroll);
+      document.removeEventListener("touchstart", handleTouchDismiss);
       clearHideTimer();
     };
   }, [editor]);
@@ -314,14 +356,17 @@ export default function TipTapEditor({
   }, []);
 
   // ── Wiki search [[ ───────────────────────────────────
+  const [wikiLoading, setWikiLoading] = useState(false);
 
   useEffect(() => {
     if (wikiSearch !== null) {
+      setWikiLoading(true);
       (async () => {
         try {
           const results = await searchEntries(wikiSearch || "");
           setWikiEntries(results.map((e: { slug: string; title: string }) => ({ slug: e.slug, title: e.title })));
         } catch { setWikiEntries([]); }
+        setWikiLoading(false);
       })();
     }
   }, [wikiSearch]);
@@ -417,12 +462,19 @@ export default function TipTapEditor({
     const $pos = editor.state.doc.resolve(from);
     const textBefore = $pos.parent.textContent.slice(0, $pos.parentOffset);
     const bracketIdx = textBefore.lastIndexOf("[[");
+    // Insert as a proper link mark, not raw markdown text.
+    // This renders as clickable "title" in visual mode, and [title](/entry/slug) in source mode.
+    const linkNode = {
+      type: "text",
+      text: title,
+      marks: [{ type: "link", attrs: { href: `/entry/${slug}` } }],
+    };
     if (bracketIdx >= 0) {
       const deleteFrom = from - (textBefore.length - bracketIdx);
       editor.chain().focus().deleteRange({ from: deleteFrom, to: from })
-        .insertContent(`[${title}](/entry/${slug})`).run();
+        .insertContent(linkNode).run();
     } else {
-      editor.chain().focus().insertContent(`[${title}](/entry/${slug})`).run();
+      editor.chain().focus().insertContent(linkNode).run();
     }
     setWikiSearch(null);
   }, [editor]);
@@ -470,10 +522,11 @@ export default function TipTapEditor({
       {/* Floating format toolbar — expanded selection menu */}
       {formatBar && (
         <div
-          className="fixed z-50 flex items-center gap-0.5 rounded-lg border border-border bg-card shadow-lg px-1.5 py-1 animate-toast-in"
+          className="fixed z-50 flex items-center gap-0.5 rounded-lg border border-border bg-card shadow-lg px-1.5 py-1 animate-toast-in overflow-x-auto flex-nowrap"
           style={{
-            left: Math.max(10, Math.min(formatBar.x - 160, window.innerWidth - 340)),
+            left: Math.max(8, Math.min(formatBar.x - 160, window.innerWidth - Math.min(window.innerWidth - 16, 340))),
             top: Math.max(10, formatBar.y),
+            maxWidth: Math.min(window.innerWidth - 16, 340),
           }}
         >
           <FmtBtn editor={editor} action="bold" label="B" title="粗体" />
@@ -482,10 +535,20 @@ export default function TipTapEditor({
           <FmtBtn editor={editor} action="strike" label="S" title="删除线" />
           <FmtBtn editor={editor} action="code" label="◻" title="行内代码" />
           <div className="w-px h-4 bg-border mx-0.5" />
-          <FmtBtn editor={editor} action="highlight" label="🖍" title="高亮" />
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const btn = e.currentTarget as HTMLElement;
+              const rect = btn.getBoundingClientRect();
+              setHighlightPicker(highlightPicker ? null : { x: rect.left, y: rect.bottom + 4 });
+            }}
+            className={`w-7 h-7 rounded text-xs font-medium interactive flex items-center justify-center ${editor?.isActive("highlight") ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            title="高亮（背景色）"
+          >🖍</button>
           <FmtBtn editor={editor} action="link" label="🔗" title="链接" />
           <div className="w-px h-4 bg-border mx-0.5" />
           <FmtBtn editor={editor} action="heading" label="H" title="标题" />
+          <FmtBtn editor={editor} action="paragraph" label="¶" title="正文" />
           <FmtBtn editor={editor} action="blockquote" label="❝" title="引用" />
           <FmtBtn editor={editor} action="bulletList" label="•" title="无序列表" />
           <FmtBtn editor={editor} action="orderedList" label="1." title="有序列表" />
@@ -494,6 +557,43 @@ export default function TipTapEditor({
           <FmtBtn editor={editor} action="alignCenter" label="⫿" title="居中" />
           <FmtBtn editor={editor} action="alignRight" label="⫸" title="右对齐" />
         </div>
+      )}
+
+      {/* Highlight color picker */}
+      {highlightPicker && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setHighlightPicker(null)} />
+          <div
+            className="fixed z-50 rounded-lg border border-border bg-card shadow-lg p-1.5 flex flex-wrap gap-1"
+            style={{
+              left: Math.min(highlightPicker.x, window.innerWidth - 200),
+              top: Math.min(highlightPicker.y, window.innerHeight - 120),
+              maxWidth: 200,
+            }}
+          >
+            {HIGHLIGHT_COLORS.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => {
+                  if (!editor) return;
+                  const ch = editor.chain().focus();
+                  if (c.value === "clear") {
+                    ch.unsetHighlight().run();
+                  } else {
+                    ch.toggleHighlight({ color: c.value }).run();
+                  }
+                  setHighlightPicker(null);
+                }}
+                className="w-7 h-7 rounded border border-border/50 interactive hover:scale-110"
+                style={{
+                  backgroundColor: c.color || "transparent",
+                  border: c.value === "clear" ? "2px dashed var(--color-border)" : undefined,
+                }}
+                title={c.label}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Block menu popover */}
@@ -512,7 +612,14 @@ export default function TipTapEditor({
 
       {/* Wiki link popover */}
       {wikiSearch !== null && (
-        <WikiLinkPopover search={wikiSearch} onSelect={handleWikiSelect} onClose={() => setWikiSearch(null)} entries={wikiEntries} />
+        <WikiLinkPopover
+          search={wikiSearch}
+          onSelect={handleWikiSelect}
+          onClose={() => setWikiSearch(null)}
+          entries={wikiEntries}
+          loading={wikiLoading}
+          position={hoverPlus || { x: window.innerWidth / 2, y: window.innerHeight / 3 }}
+        />
       )}
 
       {/* Media prompt */}
@@ -544,6 +651,17 @@ export default function TipTapEditor({
           max-height: 62vh;
           overflow-y: auto;
           font-size: var(--editor-font-size, 14px);
+        }
+
+        @media (max-width: 768px) {
+          .garden-editor-area .ProseMirror {
+            padding: 1em 0.8em;
+          }
+        }
+        @media (max-width: 400px) {
+          .garden-editor-area .ProseMirror {
+            padding: 0.8em 0.5em;
+          }
         }
 
         /* ── Collapse top margin for first block ────── */

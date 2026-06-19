@@ -57,6 +57,12 @@ function getStorageKey(): string {
   return uid ? `garden-ui-prefs:${uid}` : "garden-ui-prefs";
 }
 
+/** Mobile viewport detection — client-side only, safe to call post-hydration */
+export function isMobileViewport(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth < 768;
+}
+
 export function getPrefs(): UIPreferences {
   if (typeof window === "undefined") return { ...DEFAULT_PREFS, moduleOrder: [...DEFAULT_MODULE_ORDER] };
   try {
@@ -70,6 +76,16 @@ export function getPrefs(): UIPreferences {
       moduleOrder: parsed.moduleOrder || [...DEFAULT_MODULE_ORDER],
     };
   } catch { return { ...DEFAULT_PREFS, moduleOrder: [...DEFAULT_MODULE_ORDER] }; }
+}
+
+/** Get prefs with mobile-aware defaults — call AFTER mount/hydration */
+export function getMobilePrefs(): UIPreferences {
+  const prefs = getPrefs();
+  // Apply mobile default only when no user preference has been saved
+  if (isMobileViewport() && !localStorage.getItem(getStorageKey())) {
+    prefs.fontSize = 18;
+  }
+  return prefs;
 }
 
 export function setPrefs(p: Partial<UIPreferences>) {

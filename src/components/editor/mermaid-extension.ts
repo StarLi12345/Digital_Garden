@@ -5,6 +5,27 @@
 // ============================================================
 import { Node, mergeAttributes } from "@tiptap/core";
 
+// ── Singleton mermaid module (lazy-loaded once, shared across all NodeViews) ──
+let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
+let mermaidInitialized = false;
+function getMermaid() {
+  if (!mermaidPromise) {
+    mermaidPromise = import("mermaid").then(m => m.default);
+  }
+  return mermaidPromise;
+}
+async function ensureInit() {
+  const mermaid = await getMermaid();
+  if (!mermaidInitialized) {
+    mermaid.initialize({ startOnLoad: false });
+    mermaidInitialized = true;
+  }
+  // Always update theme (dark/light toggle)
+  const isDark = document.documentElement.classList.contains("dark");
+  mermaid.initialize({ startOnLoad: false, theme: isDark ? "dark" : "default" });
+  return mermaid;
+}
+
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     mermaid: {
@@ -66,27 +87,41 @@ export const MermaidBlock = Node.create({
       dom.appendChild(editHint);
 
       let renderTimer: ReturnType<typeof setTimeout>;
+      let currentCode = node.textContent || "graph TD\n  A[开始] --> B[结束]";
 
-      const renderMermaid = () => {
+      const renderMermaid = (code?: string) => {
         clearTimeout(renderTimer);
+        const codeToRender = code ?? currentCode;
         renderTimer = setTimeout(async () => {
           try {
-            const mermaid = (await import("mermaid")).default;
-            mermaid.initialize({
-              startOnLoad: false,
-              theme: document.documentElement.classList.contains("dark") ? "dark" : "default",
-            });
+            const mermaid = await ensureInit();
             const id = "mermaid-" + Math.random().toString(36).slice(2, 10);
-            const code = node.textContent || "graph TD\n  A[开始] --> B[结束]";
-            const { svg } = await mermaid.render(id, code);
-            preview.innerHTML = svg;
+            const { svg } = await mermaid.render(id, codeToRender);
+            // Guard: don't update if the DOM element has been removed
+            if (preview.isConnected) {
+              preview.innerHTML = svg;
+            }
           } catch {
-            preview.innerHTML = '<span class="text-xs text-red-500">⚠ 语法错误，点击编辑</span>';
+            if (preview.isConnected) {
+              preview.innerHTML = '<span class="text-xs text-red-500">⚠ 语法错误，点击编辑</span>';
+            }
           }
         }, 300);
       };
 
       renderMermaid();
+
+      // ── Theme change watcher (re-render on dark/light toggle) ──
+      let wasDark = document.documentElement.classList.contains("dark");
+      const themeObserver = new MutationObserver(() => {
+        const isDark = document.documentElement.classList.contains("dark");
+        if (isDark !== wasDark) {
+          wasDark = isDark;
+          // renderMermaid calls ensureInit() which updates mermaid's theme before rendering
+          renderMermaid(currentCode);
+        }
+      });
+      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
       // ── Click to open edit modal ──────────────────
 
@@ -144,15 +179,17 @@ export const MermaidBlock = Node.create({
           clearTimeout(editTimer);
           editTimer = setTimeout(async () => {
             try {
-              const mermaid = (await import("mermaid")).default;
-              mermaid.initialize({
-                startOnLoad: false,
-                theme: document.documentElement.classList.contains("dark") ? "dark" : "default",
-              });
+              const mermaid = await ensureInit();
               const id = "mermaid-edit-" + Math.random().toString(36).slice(2, 10);
               const { svg } = await mermaid.render(id, textarea.value || "graph TD\n  A[开始] --> B[结束]");
-              right.innerHTML = svg;
-            } catch { right.innerHTML = '<span class="text-xs text-red-500">⚠ 语法错误</span>'; }
+              if (right.isConnected) {
+                right.innerHTML = svg;
+              }
+            } catch {
+              if (right.isConnected) {
+                right.innerHTML = '<span class="text-xs text-red-500">⚠ 语法错误</span>';
+              }
+            }
           }, 400);
         };
 
@@ -193,10 +230,16 @@ export const MermaidBlock = Node.create({
       return {
         dom,
         update: (updatedNode) => {
-          if (updatedNode.textContent !== node.textContent) {
-            renderMermaid();
+          const newCode = updatedNode.textContent || "";
+          if (newCode !== currentCode) {
+            currentCode = newCode;
+            renderMermaid(newCode);
           }
           return true;
+        },
+        destroy: () => {
+          themeObserver.disconnect();
+          clearTimeout(renderTimer);
         },
       };
     };

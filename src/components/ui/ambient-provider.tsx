@@ -1,15 +1,15 @@
 "use client";
 
 // ============================================================
-// Digital Garden — Ambient Effects Provider v3
+// Digital Garden — Ambient Effects Provider v4
 // ============================================================
-// 直接从 canvas 场景中提取的粒子特效模块。
-// 樱庭→花瓣  星空→星光  雨→雨水  花园→无
-// 渲染代码与 scene-themes.tsx 中对应的粒子部分完全一致。
+// 环境动效：樱飘 / 星光 / 落雨 / 飘雪
+// 仅负责全屏粒子动画，不含光标交互。
+// 光标特效已拆分至 cursor-trail.tsx。
 // ============================================================
 
 import { useEffect, useRef } from "react";
-import { getAmbientEffect, getCursorEffect, type AmbientEffect, type CursorEffect } from "@/lib/ambient-config";
+import { getAmbientEffect, type AmbientEffect } from "@/lib/ambient-config";
 
 // ── Types (matching canvas originals) ──────────────────
 interface SakPet { x:number;y:number;vx:number;vy:number;rot:number;rv:number;size:number;alpha:number;phase:number;color:string;driftAmp:number;driftFreq:number }
@@ -30,16 +30,6 @@ function genGlassDrops(n:number,w:number,h:number):GlassDrop[]{return Array.from
 function genWindowStreaks(w:number,h:number):WindowStreak[]{return Array.from({length:30},()=>({x:Math.random()*w,y:Math.random()*h*0.7,len:6+Math.random()*40,alpha:0.1+Math.random()*0.3,speed:0.3+Math.random()*1.2,life:Math.random()*300}))}
 function genSnow(n:number,w:number,h:number):SnowParticle[]{return Array.from({length:n},()=>{const size=8+Math.random()*22;return{x:Math.random()*w,y:-Math.random()*h,vy:0.15+size*0.015+Math.random()*0.25,vx:(Math.random()-0.5)*0.3,size,alpha:0.55+Math.random()*0.4,rot:Math.random()*Math.PI*2,rv:(Math.random()-0.5)*0.008,phase:Math.random()*Math.PI*2,type:0,driftAmp:0.15+Math.random()*0.8,driftFreq:0.003+Math.random()*0.01}})}
 
-// ── Cursor trail ───────────────────────────────────────
-interface TrailParticle { x:number;y:number;size:number;opacity:number;life:number;color:string;vx:number;vy:number }
-const cursorTrails:TrailParticle[]=[];
-let mouseX=-100,mouseY=-100;
-function spawnCursor(effect:CursorEffect){
-  const colors:Record<string,string[]>={petal:["#f4c2c2","#fcd5ce","#e8c8d0"],dust:["rgba(255,240,180,","rgba(255,255,220,"],snow:["rgba(255,255,255,","rgba(240,245,255,"]};
-  const c=colors[effect]||colors.petal;const base=c[Math.floor(Math.random()*c.length)];
-  cursorTrails.push({x:mouseX+(Math.random()-0.5)*10,y:mouseY+(Math.random()-0.5)*10,size:3+Math.random()*5,opacity:0.6+Math.random()*0.4,life:40+Math.random()*30,color:base,vx:(Math.random()-0.5)*1.5,vy:(Math.random()-0.5)*1.5-1});
-}
-
 // ── Provider ──────────────────────────────────────────
 export function AmbientProvider(){
   const canvasRef=useRef<HTMLCanvasElement>(null);
@@ -51,34 +41,34 @@ export function AmbientProvider(){
   const streaksRef=useRef<WindowStreak[]>([]);
   const snowRef=useRef<SnowParticle[]>([]);
   const effectRef=useRef<AmbientEffect>("none");
-  const cursorRef=useRef<CursorEffect>("none");
 
   useEffect(()=>{
     const canvas=canvasRef.current;if(!canvas)return;const ctx=canvas.getContext("2d");if(!ctx)return;
     let animId:number;let w=0,h=0;let frameCount=0;
     const resize=()=>{w=window.innerWidth;h=window.innerHeight;canvas.width=w;canvas.height=h;};
     resize();window.addEventListener("resize",resize);
-    const onMouse=(e:MouseEvent)=>{mouseX=e.clientX;mouseY=e.clientY;};
-    window.addEventListener("mousemove",onMouse);
 
     const rf=()=>Math.max(0.4,Math.min(1.5,Math.sqrt(w*h/(1920*1080))));
-    const init=()=>{
-      const e=getAmbientEffect();effectRef.current=e;cursorRef.current=getCursorEffect();
+    const syncAmbient=()=>{
+      const e=getAmbientEffect();
+      if(e===effectRef.current)return;
+      effectRef.current=e;
       const R=rf();const isM=w<768;
+      petalsRef.current=[];starsRef.current=[];meteorsRef.current=[];
+      rainRef.current=[];glassRef.current=[];streaksRef.current=[];snowRef.current=[];
       if(e==="petal")petalsRef.current=genPetals(Math.round(R*(isM?30:80)),w,h);
       else if(e==="dust"){starsRef.current=genStars(Math.round(R*(isM?60:150)),w,h);meteorsRef.current=[];}
       else if(e==="rain"){rainRef.current=genRain(Math.round(R*(isM?120:300)),w,h);glassRef.current=genGlassDrops(Math.round(R*(isM?10:25)),w,h);streaksRef.current=genWindowStreaks(w,h);}
       else if(e==="snow")snowRef.current=genSnow(Math.round(R*(isM?25:60)),w,h);
     };
-    init();
-    const onStorage=()=>{init();};
-    window.addEventListener("storage",onStorage);
+    syncAmbient();
+    window.addEventListener("storage",syncAmbient);
 
     const loop=(now:number)=>{
       ctx.clearRect(0,0,w,h);
       const e=effectRef.current;const t=now/1000;
 
-      // ── Petal (exact copy from sakura canvas) ──
+      // ── Petal ──
       if(e==="petal"){
         for(const p of petalsRef.current){
           p.vy=0.35+Math.random()*0.55;
@@ -95,7 +85,7 @@ export function AmbientProvider(){
         }
       }
 
-      // ── Star sparkles (exact copy from starry canvas) ──
+      // ── Star sparkles ──
       if(e==="dust"){
         for(const s of starsRef.current){
           const tw=0.5+0.5*Math.sin(t*s.twinkleS+s.twinkleP);
@@ -107,7 +97,6 @@ export function AmbientProvider(){
             ctx.beginPath();ctx.arc(s.x,s.y,s.r*4.5,0,Math.PI*2);ctx.fill();
           }
         }
-        // Shooting stars — occasional
         const mets=meteorsRef.current;
         if(mets.length===0&&t>5||Math.random()<0.003&&mets.length<2){
           const a=-0.6+Math.random()*0.8;
@@ -130,7 +119,7 @@ export function AmbientProvider(){
         }
       }
 
-      // ── Rain (exact copy from rain canvas) ──
+      // ── Rain ──
       if(e==="rain"){
         for(const d of rainRef.current){
           d.y+=d.vy;d.x+=d.wind;
@@ -141,7 +130,6 @@ export function AmbientProvider(){
           ctx.lineWidth=0.8+Math.random()*0.4;
           ctx.beginPath();ctx.moveTo(d.x,d.y);ctx.lineTo(d.x+d.wind*6,d.y-d.len);ctx.stroke();
         }
-        // Window water streaks
         for(const ws of streaksRef.current){
           ws.life+=ws.speed*0.5;ws.y+=ws.speed*0.3;
           if(ws.y>h*0.9){ws.y=0;ws.x=Math.random()*w;ws.len=6+Math.random()*40;ws.alpha=0.08+Math.random()*0.25;}
@@ -153,7 +141,6 @@ export function AmbientProvider(){
             ctx.beginPath();ctx.arc(ws.x+1,ws.y+ws.len,2.5,0,Math.PI*2);ctx.fill();
           }
         }
-        // Glass droplets — large foreground water beads
         for(const gd of glassRef.current){
           gd.y+=gd.vy;gd.trail+=(gd.y-gd.trail)*0.04;
           if(gd.y>h+20){gd.y=-10-Math.random()*30;gd.x=Math.random()*w;gd.trail=gd.y}
@@ -176,25 +163,18 @@ export function AmbientProvider(){
           if(sf.x<-50)sf.x=w+50;if(sf.x>w+50)sf.x=-50;
           ctx.save();ctx.translate(sf.x,sf.y);ctx.rotate(sf.rot);
           const s=sf.size;const a=sf.alpha*(0.85+0.15*Math.sin(t*0.5+sf.phase));
-          // Detailed dendritic snowflake
           ctx.strokeStyle=`rgba(255,255,255,${a.toFixed(2)})`;ctx.lineWidth=1.2;ctx.lineCap="round";
           ctx.beginPath();
-          // 6 main arms with multi-level branching
           for(let j=0;j<6;j++){
             const baseAng=j*Math.PI/3;
-            // Main arm (center to tip)
             const tipX=Math.cos(baseAng)*s,tipY=Math.sin(baseAng)*s;
             ctx.moveTo(0,0);ctx.lineTo(tipX,tipY);
-            // Level 1 branches (at 40%, 65%, 85% of arm length)
             for(let lvl=0;lvl<3;lvl++){
               const frac=0.4+lvl*0.22;
               const bx=Math.cos(baseAng)*s*frac,by=Math.sin(baseAng)*s*frac;
               const blen=s*(0.3-lvl*0.08);
-              // Branch left
               ctx.moveTo(bx,by);ctx.lineTo(bx+Math.cos(baseAng+0.55)*blen,by+Math.sin(baseAng+0.55)*blen);
-              // Branch right
               ctx.moveTo(bx,by);ctx.lineTo(bx+Math.cos(baseAng-0.55)*blen,by+Math.sin(baseAng-0.55)*blen);
-              // Level 2 sub-branches (on longer branches)
               if(lvl<2&&blen>s*0.15){
                 const sbx=bx+Math.cos(baseAng+0.55)*blen*0.5,sby=by+Math.sin(baseAng+0.55)*blen*0.5;
                 const sblen=blen*0.5;
@@ -207,27 +187,16 @@ export function AmbientProvider(){
             }
           }
           ctx.stroke();
-          // Bright hexagonal core
           ctx.fillStyle=`rgba(255,255,255,${Math.min(1,a+0.15).toFixed(2)})`;
           ctx.beginPath();ctx.arc(0,0,s*0.1,0,Math.PI*2);ctx.fill();
           ctx.restore();
         }
       }
 
-      // Cursor
-      if(cursorRef.current!=="none"&&frameCount%2===0)spawnCursor(cursorRef.current);
-      for(let i=cursorTrails.length-1;i>=0;i--){
-        const tc=cursorTrails[i];tc.x+=tc.vx;tc.y+=tc.vy;tc.life--;tc.opacity*=0.97;tc.size*=0.99;
-        if(tc.life<=0){cursorTrails.splice(i,1);continue}
-        ctx.save();ctx.globalAlpha=tc.opacity;
-        ctx.fillStyle=typeof tc.color==="string"&&tc.color.startsWith("rgba")?tc.color+tc.opacity+")":tc.color;
-        ctx.beginPath();ctx.arc(tc.x,tc.y,tc.size,0,Math.PI*2);ctx.fill();ctx.restore();
-      }
-
       frameCount++;animId=requestAnimationFrame(loop);
     };
     animId=requestAnimationFrame(loop);
-    return()=>{cancelAnimationFrame(animId);window.removeEventListener("resize",resize);window.removeEventListener("mousemove",onMouse);window.removeEventListener("storage",onStorage);};
+    return()=>{cancelAnimationFrame(animId);window.removeEventListener("resize",resize);window.removeEventListener("storage",syncAmbient);};
   },[]);
 
   return(<canvas ref={canvasRef} style={{position:"fixed",inset:0,zIndex:0,pointerEvents:"none",width:"100%",height:"100%"}} aria-hidden="true"/>);

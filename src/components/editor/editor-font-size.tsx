@@ -10,20 +10,21 @@
 import { useState, useEffect } from "react";
 
 const PRESETS = [
-  { label: "小", size: 12 },
-  { label: "中", size: 14 },
-  { label: "大", size: 18 },
+  { label: "小", size: 14 },
+  { label: "中", size: 18 },
+  { label: "大", size: 24 },
 ] as const;
 
 const MIN = 10;
-const MAX = 28;
+const MAX = 36;
+const DEFAULT = 18;
 
 function getStored(): number {
   try {
     const v = Number(localStorage.getItem("garden-editor-font-size"));
-    return v >= MIN && v <= MAX ? v : 14;
+    return v >= MIN && v <= MAX ? v : DEFAULT;
   } catch {
-    return 14;
+    return DEFAULT;
   }
 }
 
@@ -32,7 +33,7 @@ function applyFontSize(size: number) {
 }
 
 export function EditorFontSize() {
-  const [size, setSize] = useState(14);
+  const [size, setSize] = useState(DEFAULT);
   const [showSlider, setShowSlider] = useState(false);
 
   useEffect(() => {

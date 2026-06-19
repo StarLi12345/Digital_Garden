@@ -16,15 +16,26 @@ function isMobile(): boolean {
   return window.innerWidth < 768;
 }
 
+function getStoredBlur(): number {
+  try { return Number(localStorage.getItem("garden-bg-blur")) || 0; } catch { return 0; }
+}
+
 export function GardenBackground({ opacity = 1 }: { opacity?: number }) {
   const [loaded, setLoaded] = useState(false);
   const [mobile, setMobile] = useState(false);
+  const [blur, setBlur] = useState(0);
 
   useEffect(() => {
     setMobile(isMobile());
+    setBlur(getStoredBlur());
     const onResize = () => setMobile(isMobile());
+    const onBgChange = () => setBlur(getStoredBlur());
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.addEventListener("garden-bg-changed", onBgChange);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("garden-bg-changed", onBgChange);
+    };
   }, []);
 
   // Always use moonlight-04 — it's already a moonlit night scene,
@@ -60,7 +71,10 @@ export function GardenBackground({ opacity = 1 }: { opacity?: number }) {
           backgroundImage: loaded ? `url(${imgSrc})` : "none",
           backgroundSize: "cover",
           backgroundPosition: "center",
-          backgroundAttachment: "fixed",
+          // Fixed attachment is broken on mobile (iOS/Safari zooms in).
+          // Use scroll on small screens to avoid the zoom artifact.
+          backgroundAttachment: mobile ? "scroll" : "fixed",
+          filter: blur > 0 ? `blur(${blur}px)` : "none",
           opacity: loaded ? opacity : 0,
         }}
       />

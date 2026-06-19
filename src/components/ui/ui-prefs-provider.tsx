@@ -5,11 +5,11 @@
 // ============================================================
 
 import { useEffect } from "react";
-import { getPrefs, applyPrefs } from "@/lib/ui-preferences";
+import { getMobilePrefs, applyPrefs } from "@/lib/ui-preferences";
 
 export function UIPrefsProvider() {
   useEffect(() => {
-    const tick = () => applyPrefs(getPrefs());
+    const tick = () => applyPrefs(getMobilePrefs());
     tick();
     window.addEventListener("storage", tick);
     return () => window.removeEventListener("storage", tick);

@@ -30,6 +30,18 @@ async function getUserId(): Promise<string | null> {
   }
 }
 
+/** Require real auth (not guest mode) for write operations */
+async function requireAuth(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies();
+    const auth = cookieStore.get("garden-auth")?.value;
+    if (!auth || auth !== "verified") return null;
+    return cookieStore.get(SESSION_COOKIE)?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Types ─────────────────────────────────────────────
 
 export interface CreateEntryInput {
@@ -153,7 +165,7 @@ export async function createEntry(
   const tagNames = (input.tags ?? []).filter(t => t.trim());
 
   try {
-    const userId = await getUserId();
+    const userId = await requireAuth();
     if (!userId) {
       return { success: false, error: "请先登录" };
     }
@@ -222,13 +234,18 @@ export async function getEntryBySlug(
     const entry = await prisma.entry.findUnique({
       where: { slug },
       include: {
-        tags: {
-          include: { tag: true },
-        },
+        tags: { include: { tag: true } },
+        user: { select: { visibility: true, id: true } },
       },
     });
 
     if (!entry) return null;
+
+    // Block access to private users' entries (unless owner)
+    const userId = await getUserId();
+    if (entry.user.visibility === "private" && entry.user.id !== userId) {
+      return null;
+    }
 
     return {
       id: entry.id,
@@ -274,6 +291,10 @@ export async function updateEntry(
   }
 
   try {
+    // ── Auth check ──────────────────────────────────
+    const userId = await requireAuth();
+    if (!userId) return { success: false, error: "请先登录" };
+
     // ── Find existing ────────────────────────────────
     const existing = await prisma.entry.findUnique({ where: { slug } });
     if (!existing) {
@@ -382,7 +403,7 @@ export async function listEntries(limit = DEFAULT_PAGE_SIZE) {
   try {
     const userId = await getUserId();
     const entries = await prisma.entry.findMany({
-      where: userId ? { userId } : {},
+      where: userId ? { userId } : { user: { visibility: "public" } },
       orderBy: { updatedAt: "desc" },
       take: limit,
       select: {
@@ -432,17 +453,48 @@ export async function searchEntries(query: string) {
         OR: [
           { title: { contains: query } },
           { excerpt: { contains: query } },
+          { contentMd: { contains: query } },
         ],
       },
-      select: { slug: true, title: true },
-      take: 10,
+      select: {
+        slug: true, title: true, type: true,
+        excerpt: true, createdAt: true, updatedAt: true,
+        tags: { include: { tag: true } },
+      },
+      take: 20,
       orderBy: { updatedAt: "desc" },
     });
-    return entries;
+    return entries.map((e) => ({
+      slug: e.slug,
+      title: e.title,
+      type: e.type,
+      excerpt: e.excerpt,
+      createdAt: e.createdAt.toISOString(),
+      tags: e.tags.map((et) => ({ name: et.tag.name })),
+    }));
   } catch (error) {
     console.error("searchEntries failed:", error);
     return [];
   }
+}
+
+// ───────────────────────────────────────────
+// Tag listing — for autocomplete
+// ───────────────────────────────────────────
+
+/** List all tags with usage counts for autocomplete. Respects guest mode. */
+export async function listAllTags(): Promise<{ name: string; slug: string; count: number }[]> {
+  try {
+    const userId = await getUserId();
+    const tags = await prisma.tag.findMany({
+      where: userId
+        ? { entries: { some: { entry: { userId } } } }
+        : { entries: { some: { entry: { user: { visibility: "public" } } } } },
+      include: { _count: { select: { entries: true } } },
+      orderBy: { entries: { _count: "desc" } },
+    });
+    return tags.map((t) => ({ name: t.name, slug: t.slug, count: t._count.entries }));
+  } catch { return []; }
 }
 
 // ───────────────────────────────────────────
@@ -519,7 +571,7 @@ export async function getGraphData() {
   try {
     const userId = await getUserId();
     const entries = await prisma.entry.findMany({
-      where: userId ? { userId } : {},
+      where: userId ? { userId } : { user: { visibility: "public" } },
       select: { id: true, title: true, slug: true, type: true, content: true, createdAt: true },
       orderBy: { createdAt: "asc" },
       take: 200,
@@ -588,6 +640,9 @@ export async function getLinkStats(slug: string): Promise<{ backlinks: number; o
  */
 export async function deleteEntry(slug: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const userId = await requireAuth();
+    if (!userId) return { success: false, error: "请先登录" };
+
     const existing = await prisma.entry.findUnique({ where: { slug } });
     if (!existing) {
       return { success: false, error: "条目不存在" };
@@ -677,5 +732,41 @@ export async function getGardenMemory(): Promise<EntryResult["data"] | null> {
   } catch (error) {
     console.error("getGardenMemory failed:", error);
     return null;
+  }
+}
+
+/**
+ * Lightweight stats — returns counts without loading full entry data.
+ * Used by homepage to avoid listEntries(1000).
+ */
+export async function getGardenStats(): Promise<{
+  entryCount: number;
+  tagCount: number;
+  tagFreq: { name: string; count: number }[];
+}> {
+  try {
+    const userId = await getUserId();
+    const where = userId ? { userId } : { user: { visibility: "public" } };
+
+    const entryCount = await prisma.entry.count({ where });
+
+    const tags = await prisma.entryTag.findMany({
+      where: { entry: where },
+      include: { tag: true },
+    });
+
+    const freqMap: Record<string, number> = {};
+    for (const et of tags) {
+      freqMap[et.tag.name] = (freqMap[et.tag.name] || 0) + 1;
+    }
+    const tagCount = Object.keys(freqMap).length;
+    const tagFreq = Object.entries(freqMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return { entryCount, tagCount, tagFreq };
+  } catch (error) {
+    console.error("getGardenStats failed:", error);
+    return { entryCount: 0, tagCount: 0, tagFreq: [] };
   }
 }

@@ -64,7 +64,7 @@ export interface Live2DConfig {
 }
 
 const DEFAULT_CONFIG: Live2DConfig = {
-  modelId: "koharu",
+  modelId: "shizuku",
   customJsonPath: "",
   enabled: true,
 };

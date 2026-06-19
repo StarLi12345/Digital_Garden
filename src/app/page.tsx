@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, type DragEvent } from "react";
 import Link from "next/link";
-import { listEntries, getGardenMemory } from "@/actions/entry-actions";
+import { listEntries, getGardenMemory, getGardenStats } from "@/actions/entry-actions";
 import { TYPE_LABELS } from "@/lib/constants";
 import { getPrefs, setPrefs, type ModuleVisibility } from "@/lib/ui-preferences";
 import { Statistic } from "@/components/ui/garden-widgets";
@@ -56,6 +56,10 @@ type ModuleKey = "greeting" | "stats" | "gardenMemory" | "recentEntries";
 
 export default function HomePage() {
   const [entries, setEntries] = useState<EntrySummary[]>([]);
+  const [entryCount, setEntryCount] = useState(0);
+  const [tagCount, setTagCount] = useState(0);
+  const [tagFreq, setTagFreq] = useState<{ name: string; count: number }[]>([]);
+  const [globalViews, setGlobalViews] = useState<{totalViews:number;todayViews:number;weekViews:number} | null>(null);
   const [loading, setLoading] = useState(true);
   const [memory, setMemory] = useState<MemoryEntry | null>(null);
   const [modules, setModules] = useState<ModuleVisibility>(() => getPrefs().modules);
@@ -75,25 +79,25 @@ export default function HomePage() {
 
   useEffect(() => {
     (async () => {
-      const data = await listEntries(1000);
+      const data = await listEntries();
       setEntries(data);
       setLoading(false);
+    })();
+    (async () => {
+      const stats = await getGardenStats();
+      setEntryCount(stats.entryCount);
+      setTagCount(stats.tagCount);
+      setTagFreq(stats.tagFreq);
     })();
     (async () => {
       const m = await getGardenMemory();
       setMemory(m as MemoryEntry | null);
     })();
+    fetch("/api/views").then(r => r.json()).then(d => {
+      if (d.totalViews !== undefined) setGlobalViews(d);
+    }).catch(() => {});
   }, []);
 
-  const entryCount = entries.length;
-  const tagSet = new Set<string>();
-  entries.forEach((e) => e.tags.forEach((t) => tagSet.add(t.name)));
-  const tagCount = tagSet.size;
-  const tagFreq: { name: string; count: number }[] = [];
-  const tfMap: Record<string, number> = {};
-  entries.forEach(e => e.tags.forEach(t => { tfMap[t.name] = (tfMap[t.name] || 0) + 1; }));
-  for (const [name, count] of Object.entries(tfMap)) tagFreq.push({ name, count });
-  tagFreq.sort((a, b) => b.count - a.count);
   const recent = entries.slice(0, 5);
 
   const handleDragStart = useCallback((e: DragEvent<HTMLDivElement>, modKey: string) => {
@@ -137,12 +141,18 @@ export default function HomePage() {
         );
 
       case "stats":
-        if (!modules.stats || loading || entryCount === 0) return null;
+        if (!modules.stats || loading) return null;
         return (
           <section key={key} className="mb-10">
-            <div className="flex gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               <Statistic value={entryCount} label="条记录" animated />
               <Statistic value={tagCount} label="个标签" animated />
+              {globalViews && (
+                <>
+                  <Statistic value={globalViews.totalViews} label="次访问" animated />
+                  <Statistic value={globalViews.todayViews} label="今日访客" animated />
+                </>
+              )}
             </div>
             {tagFreq.length > 0 && <TagCloud tags={tagFreq.slice(0, 20)} />}
           </section>
@@ -246,7 +256,7 @@ export default function HomePage() {
   return (
     <>
     {/* ── Hero Carousel ── */}
-    <GardenCarousel slides={heroSlides} height="360px" className="mb-0" />
+    <GardenCarousel slides={heroSlides} height="min(360px, 50vh)" className="mb-0" />
 
     <div className="reading-container py-12">
       <div className="flex justify-end mb-6">

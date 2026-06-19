@@ -27,8 +27,8 @@ export function WidgetPanel() {
   const [mounted, setMounted] = useState(false);
 
   const refresh = useCallback(() => {
-    setShowCal(getBool("garden-widget-cal", true));
-    setShowWeather(getBool("garden-widget-weather", true));
+    setShowCal(getBool("garden-widget-cal", false));
+    setShowWeather(getBool("garden-widget-weather", false));
   }, []);
 
   useEffect(() => {

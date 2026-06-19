@@ -16,7 +16,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 type SceneId = "garden" | "starry" | "sakura" | "rain";
 const SCENE_TABLE: Record<string, SceneId> = { garden:"garden", starry:"starry", sakura:"sakura", rain:"rain" };
-function getScene(): SceneId { try { const t = localStorage.getItem("garden-theme")||"garden"; return SCENE_TABLE[t]||"garden"; } catch { return "garden"; } }
+function getScene(): SceneId { if (typeof window === "undefined") return "garden"; try { const t = localStorage.getItem("garden-theme")||"garden"; return SCENE_TABLE[t]||"garden"; } catch { return "garden"; } }
 
 interface GardenPetal { x:number;y:number;vx:number;vy:number;rot:number;rv:number;size:number;alpha:number;phase:number;color:string }
 interface Ripple { x:number;y:number;r:number;maxR:number;alpha:number }

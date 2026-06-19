@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "./theme-provider";
 import { motion, AnimatePresence } from "framer-motion";
 import { AvatarEditor } from "./avatar-editor";
+import { SearchModal } from "./search-modal";
 import { NAV_ITEMS } from "@/lib/nav-items";
 
 interface UserInfo {
@@ -26,28 +27,63 @@ export function Nav() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
   const [allUsers, setAllUsers] = useState<UserInfo[]>([]);
   const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }, []);
 
+  const [isRealAuth, setIsRealAuth] = useState(false);
+
   useEffect(() => {
+    setIsRealAuth(document.cookie.includes("garden-auth=verified"));
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.user) setCurrentUser(d.user);
+        if (d?.user) {
+          setCurrentUser(d.user);
+          if (d.user.id !== "default-user") {
+            try {
+              const raw = localStorage.getItem("garden-recent-ids");
+              const list: string[] = raw ? JSON.parse(raw) : [];
+              const filtered = list.filter(id => id !== d.user.id);
+              filtered.unshift(d.user.id);
+              localStorage.setItem("garden-recent-ids", JSON.stringify(filtered.slice(0, 5)));
+              loadUsers();
+            } catch {}
+          }
+        }
       })
       .catch(() => {});
   }, [pathname]);
 
   const loadUsers = () => {
-    fetch("/api/auth/users")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.users) setAllUsers(d.users);
-      })
-      .catch(() => {});
+    const list: UserInfo[] = [];
+    // Always include the public display account
+    list.push({ id: "default-user", username: "Star.Li", displayName: "Star.Li", avatar: null });
+    setAllUsers(list);
+    // Fetch recent accounts with avatars from API
+    try {
+      const raw = localStorage.getItem("garden-recent-ids");
+      if (raw) {
+        const ids: string[] = JSON.parse(raw);
+        if (ids.length > 0) {
+          fetch(`/api/auth/users?ids=${ids.join(",")}`)
+            .then(r => r.json())
+            .then(d => {
+              if (d.users) {
+                const merged = [...list];
+                for (const u of d.users) {
+                  if (!merged.find(x => x.id === u.id)) merged.push(u);
+                }
+                setAllUsers(merged);
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    } catch {}
   };
 
   // Close user menu on outside click
@@ -61,6 +97,18 @@ export function Nav() {
     return () => document.removeEventListener("mousedown", handler);
   }, [userMenuOpen]);
 
+  // Ctrl+K / Cmd+K — toggle search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   const cycleTheme = () => {
     const order: Array<"light" | "dark" | "system"> = ["light", "dark", "system"];
     setTheme(order[(order.indexOf(theme) + 1) % order.length]);
@@ -73,7 +121,7 @@ export function Nav() {
     const a = document.querySelector("audio"); if (a) { a.pause(); a.src = ""; }
     try { localStorage.setItem("garden-bgm-enabled", "false"); } catch {}
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-    window.location.replace("/login");
+    window.location.replace("/");
   };
 
   const switchUser = async (userId: string) => {
@@ -90,7 +138,7 @@ export function Nav() {
         window.location.href = `/login?username=${encodeURIComponent(data.username || "")}`;
       }
     } catch {
-      window.location.replace("/login");
+      window.location.replace("/");
     }
   };
 
@@ -107,7 +155,7 @@ export function Nav() {
     });
     setPendingDelete(null);
     if (userId === currentUser?.id) {
-      window.location.replace("/login");
+      window.location.replace("/");
     } else {
       setDeleteSuccess(true);
     }
@@ -135,7 +183,7 @@ export function Nav() {
 
   return (
     <div className="border-b border-nav-border bg-nav-bg backdrop-blur-sm">
-      <nav className="garden-nav mx-auto flex h-14 max-w-5xl items-center justify-between px-3 sm:px-6">
+      <nav className="garden-nav mx-auto flex h-14 max-w-6xl items-center justify-between px-3 sm:px-6">
         <div className="flex items-center gap-5">
           <Link
             href="/"
@@ -157,6 +205,7 @@ export function Nav() {
                     setHoveredNav(href);
                   }}
                   onMouseLeave={() => {
+                    if (hoverTimerRef.current != null) clearTimeout(hoverTimerRef.current);
                     hoverTimerRef.current = setTimeout(() => setHoveredNav(null), 120);
                   }}
                   className={`inline-flex items-center rounded-md interactive transition-all duration-300 ease-in-out ${
@@ -184,6 +233,16 @@ export function Nav() {
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Search */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="inline-flex items-center rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted interactive"
+            title="搜索 (Ctrl+K)"
+          >
+            <span>🔍</span>
+            <span className="hidden sm:inline text-[0.625rem] ml-1 text-muted-foreground/50">Ctrl+K</span>
+          </button>
+
           <button
             onClick={cycleTheme}
             className="inline-flex items-center rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted interactive"
@@ -222,11 +281,15 @@ export function Nav() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-border bg-[var(--color-background)] shadow-lg z-50 overflow-hidden"
+                  className="absolute right-0 top-full mt-2 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-[var(--color-background)] shadow-lg z-50 overflow-hidden"
                 >
-                  {/* Current user info — with large avatar */}
-                  <div className="px-4 py-3 border-b border-border">
-                    <p className="text-xs text-muted-foreground mb-2">当前账号</p>
+                  {/* Current user info — clickable to account page */}
+                  <a
+                    href="/account"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="px-4 py-3 border-b border-border block hover:bg-muted/50 interactive transition-colors"
+                  >
+                    <p className="text-xs text-muted-foreground mb-2">当前账号 ▸</p>
                     <div className="flex items-center gap-3">
                       {avatarSrc ? (
                         <img
@@ -250,7 +313,7 @@ export function Nav() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </a>
 
                   {/* Other users — switch account */}
                   {allUsers.length > 1 && (
@@ -271,12 +334,15 @@ export function Nav() {
                                   src={user.avatar}
                                   alt=""
                                   className="w-7 h-7 rounded-full object-cover border border-border flex-shrink-0"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = "none";
+                                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                                  }}
                                 />
-                              ) : (
-                                <span className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-                                  {(user.displayName || user.username)[0].toUpperCase()}
-                                </span>
-                              )}
+                              ) : null}
+                              <span className={`w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0 ${user.avatar ? "hidden" : ""}`}>
+                                {(user.displayName || user.username)[0].toUpperCase()}
+                              </span>
                               <div className="min-w-0">
                                 <p className="text-sm text-foreground truncate">
                                   {user.displayName || user.username}
@@ -305,20 +371,33 @@ export function Nav() {
 
                   {/* Actions */}
                   <div className="px-2 py-2 space-y-0.5">
-                    <button
-                      onClick={() => { setAvatarEditorOpen(true); setUserMenuOpen(false); }}
-                      className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted interactive"
-                    >
-                      <span>📷</span>
-                      <span>修改头像</span>
-                    </button>
-                    <button
-                      onClick={logout}
-                      className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950 interactive"
-                    >
-                      <span>🚪</span>
-                      <span>退出登录</span>
-                    </button>
+                    {!isRealAuth ? (
+                      <a
+                        href="/login"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-primary hover:bg-primary/10 interactive"
+                      >
+                        <span>🔑</span>
+                        <span>登录</span>
+                      </a>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => { setAvatarEditorOpen(true); setUserMenuOpen(false); }}
+                          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted interactive"
+                        >
+                          <span>📷</span>
+                          <span>修改头像</span>
+                        </button>
+                        <button
+                          onClick={logout}
+                          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950 interactive"
+                        >
+                          <span>🚪</span>
+                          <span>退出登录</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -466,6 +545,8 @@ export function Nav() {
           </>,
           document.body,
         )}
+      {/* Search Modal */}
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

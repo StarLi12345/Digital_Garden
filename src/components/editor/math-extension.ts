@@ -64,19 +64,25 @@ export const MathBlock = Node.create({
       dom.appendChild(editHint);
 
       let renderTimer: ReturnType<typeof setTimeout>;
+      let currentFormula = node.textContent || "E = mc^2";
 
-      const renderMath = () => {
+      const renderMath = (formula?: string) => {
         clearTimeout(renderTimer);
+        const formulaToRender = formula ?? currentFormula;
         renderTimer = setTimeout(async () => {
           try {
             const katex = (await import("katex")).default;
-            const html = katex.renderToString(node.textContent || "E=mc^2", {
+            const html = katex.renderToString(formulaToRender, {
               throwOnError: false,
               displayMode: true,
             });
-            preview.innerHTML = html;
+            if (preview.isConnected) {
+              preview.innerHTML = html;
+            }
           } catch {
-            preview.innerHTML = '<span class="text-xs text-red-500">⚠ 语法错误，点击编辑</span>';
+            if (preview.isConnected) {
+              preview.innerHTML = '<span class="text-xs text-red-500">⚠ 语法错误，点击编辑</span>';
+            }
           }
         }, 300);
       };
@@ -188,8 +194,10 @@ export const MathBlock = Node.create({
       return {
         dom,
         update: (updatedNode) => {
-          if (updatedNode.textContent !== node.textContent) {
-            renderMath();
+          const newFormula = updatedNode.textContent || "";
+          if (newFormula !== currentFormula) {
+            currentFormula = newFormula;
+            renderMath(newFormula);
           }
           return true;
         },

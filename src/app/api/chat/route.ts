@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     // Read API config from headers (client sends from localStorage)
     const apiUrl = req.headers.get("x-garden-api-url") || "";
     const apiKey = req.headers.get("x-garden-api-key") || "";
-    const apiModel = req.headers.get("x-garden-api-model") || "deepseek-v4-flash";
+    const apiModel = req.headers.get("x-garden-api-model") || "";
 
     // Gather garden stats for the system prompt
     const stats = await getGardenStats();

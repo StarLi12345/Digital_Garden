@@ -7,7 +7,7 @@
 // 支持: 标题H1-H5 / 格式 / 媒体 / 列表 / 块 / 链接
 // ============================================================
 
-import { useState, type ReactNode } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 
 // ── Menu item types ───────────────────────────────────
 
@@ -28,7 +28,7 @@ const COLORS = [
   { label: "琥珀", value: "#f59e0b", color: "#f59e0b" },
 ];
 
-const HIGHLIGHT_COLORS = [
+export const HIGHLIGHT_COLORS = [
   { label: "亮黄（默认）", value: "#fff176", color: "#fff176" },
   { label: "浅绿", value: "#c8e6c9", color: "#c8e6c9" },
   { label: "浅蓝", value: "#bbdefb", color: "#bbdefb" },
@@ -47,11 +47,12 @@ const MENU_GROUPS: { label: string; items: MenuItem[] }[] = [
       { label: "H3 小标题", icon: "H3", action: "heading", level: 3 },
       { label: "H4", icon: "H4", action: "heading", level: 4 },
       { label: "H5", icon: "H5", action: "heading", level: 5 },
+      { label: "正文", icon: "¶", action: "paragraph" },
     ]},
     { label: "粗体", icon: "B", action: "bold" },
     { label: "斜体", icon: "I", action: "italic" },
     { label: "下划线", icon: "U", action: "underline" },
-    { label: "内联高亮", icon: "🖍", action: "highlight", children: HIGHLIGHT_COLORS.map(c => ({ label: c.label, icon: "◉", action: "highlight", color: c.value })) },
+    { label: "高亮（背景色）", icon: "🖍", action: "highlight", children: HIGHLIGHT_COLORS.map(c => ({ label: c.label, icon: "◉", action: "highlight", color: c.value })) },
     { label: "文字颜色", icon: "🎨", action: "color", children: COLORS.map(c => ({ icon: "●", action: "color", ...c })) },
     { label: "左对齐", icon: "⫷", action: "alignLeft" },
     { label: "居中", icon: "⫿", action: "alignCenter" },
@@ -149,38 +150,79 @@ export function BlockMenu({
 // ── Wiki Link Popover ─────────────────────────────────
 
 export function WikiLinkPopover({
-  search, onSelect, onClose, entries,
+  search, onSelect, onClose, entries, loading, position,
 }: {
   search: string;
   onSelect: (slug: string, title: string) => void;
   onClose: () => void;
   entries: { slug: string; title: string }[];
+  loading?: boolean;
+  position?: { x: number; y: number };
 }) {
+  // Local search state for filtering
+  const [localSearch, setLocalSearch] = useState(search || "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const id = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(id);
+  }, []);
+
+  const effectiveSearch = search || localSearch;
   const filtered = entries.filter((e) =>
-    e.title.toLowerCase().includes(search.toLowerCase())
+    e.title.toLowerCase().includes(effectiveSearch.toLowerCase())
   ).slice(0, 8);
+
+  const left = position ? Math.min(position.x, window.innerWidth - 280) : window.innerWidth / 2 - 130;
+  const top = position ? Math.max(10, Math.min(position.y, window.innerHeight - 300)) : window.innerHeight / 3;
 
   return (
     <>
       <div className="fixed inset-0 z-50" onClick={onClose} />
-      <div className="fixed z-50 rounded-lg border border-border bg-card shadow-lg p-1.5 min-w-[240px]">
-        <p className="px-3 py-1.5 text-[0.625rem] text-muted-foreground uppercase">内部引用</p>
-        {filtered.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-muted-foreground">
-            {search ? "无匹配笔记" : "输入关键词搜索…"}
-          </p>
-        ) : (
-          filtered.map((e) => (
-            <button
-              key={e.slug}
-              onClick={() => { onSelect(e.slug, e.title); onClose(); }}
-              className="w-full text-left px-3 py-2 text-xs rounded hover:bg-muted interactive flex items-center gap-2"
-            >
-              <span className="text-foreground truncate">{e.title}</span>
-              <span className="text-muted-foreground text-[0.625rem] shrink-0">/{e.slug}</span>
-            </button>
-          ))
-        )}
+      <div
+        className="fixed z-50 rounded-lg border border-border bg-card shadow-lg p-2"
+        style={{ left, top, width: 280, maxHeight: 320 }}
+      >
+        <p className="px-3 py-1.5 text-[0.625rem] text-muted-foreground uppercase tracking-wider">
+          内部引用
+        </p>
+        <div className="px-2 pb-1">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="输入关键词搜索已有笔记…"
+            value={effectiveSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") onClose();
+              if (e.key === "Enter" && filtered.length === 1) {
+                onSelect(filtered[0].slug, filtered[0].title);
+                onClose();
+              }
+            }}
+            className="w-full rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50"
+          />
+        </div>
+        <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
+          {loading ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">加载中…</p>
+          ) : filtered.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              {effectiveSearch ? "无匹配笔记" : "输入关键词搜索已有笔记…"}
+            </p>
+          ) : (
+            filtered.map((e) => (
+              <button
+                key={e.slug}
+                onClick={() => { onSelect(e.slug, e.title); onClose(); }}
+                className="w-full text-left px-3 py-2 text-xs rounded hover:bg-muted interactive flex items-center gap-2"
+              >
+                <span className="text-foreground truncate">{e.title}</span>
+                <span className="text-muted-foreground text-[0.625rem] shrink-0">/{e.slug}</span>
+              </button>
+            ))
+          )}
+        </div>
       </div>
     </>
   );

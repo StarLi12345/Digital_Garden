@@ -6,7 +6,8 @@ import { SESSION_COOKIE } from "@/lib/auth";
 export async function PUT(request: Request) {
   const cookieStore = await cookies();
   const userId = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!userId) {
+  const auth = cookieStore.get("garden-auth")?.value;
+  if (!userId || auth !== "verified") {
     return NextResponse.json({ error: "请先登录" }, { status: 401 });
   }
 

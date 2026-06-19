@@ -37,11 +37,7 @@ function saveDrafts(drafts: Draft[]) {
   try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); } catch {}
 }
 
-function countWords(md: string): number {
-  const chineseChars = (md.match(/[一-鿿]/g) || []).length;
-  const englishWords = (md.replace(/[一-鿿]/g, " ").match(/\b\w+\b/g) || []).length;
-  return chineseChars + englishWords;
-}
+import { countWords } from "@/lib/word-count";
 
 export default function DraftsPage() {
   const router = useRouter();

@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({ success: true, user: userInfo });
   const cookieOpts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: request.url.startsWith("https://"),
     sameSite: "lax" as const,
     path: "/",
     maxAge: SESSION_DURATION,
@@ -44,6 +44,8 @@ export async function POST(request: Request) {
   response.cookies.set(SESSION_COOKIE, user.id, cookieOpts);
   // Client-readable cookie for localStorage namespacing
   response.cookies.set("garden-user-id", user.id, { ...cookieOpts, httpOnly: false });
+  // Auth marker: real login, not guest mode
+  response.cookies.set("garden-auth", "verified", { ...cookieOpts, httpOnly: false });
 
   return response;
 }

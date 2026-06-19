@@ -254,7 +254,7 @@ export default function GraphPage() {
           {followMode ? "🎯 跟随" : "📍 固定"}
         </button>
 
-        <button onClick={resetAnim} className="text-[0.688rem] text-muted-foreground hover:text-foreground interactive shrink-0">↺ 重置</button>
+        <button onClick={resetAnim} className="garden-ctrl-btn-muted shrink-0 interactive">↺ 重置</button>
       </div>
 
       {/* Search + Type filters */}
@@ -269,7 +269,7 @@ export default function GraphPage() {
             const active = typeFilter.size === 0 || typeFilter.has(t);
             return (
               <button key={t} onClick={() => toggleTypeFilter(t)}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.688rem] interactive border ${active?"border-primary/30 bg-primary/5 text-foreground":"border-border bg-muted/30 text-muted-foreground"}`}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.688rem] interactive border ${active?"border-primary/30 bg-primary/5 text-foreground":"border-border bg-card text-muted-foreground"}`}
                 style={{ borderColor: active ? TYPE_COLORS[t] : undefined, backgroundColor: active ? `${TYPE_COLORS[t]}15` : undefined }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[t] }} />{TYPE_LABELS[t] || t}
               </button>
@@ -277,7 +277,7 @@ export default function GraphPage() {
           })}
         </div>
         {(typeFilter.size > 0 || search) && (
-          <button onClick={() => { setTypeFilter(new Set()); setSearch(""); }} className="text-[0.688rem] text-muted-foreground hover:text-foreground interactive">清除</button>
+          <button onClick={() => { setTypeFilter(new Set()); setSearch(""); }} className="garden-ctrl-btn-muted interactive">清除</button>
         )}
       </div>
 

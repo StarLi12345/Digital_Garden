@@ -31,15 +31,20 @@ function isVideoSrc(src: string | null): boolean {
 const DEFAULT_BG = "/backgrounds/moonlight-04.jpg";
 
 function resolveBgSrc(): string {
-  const stored = localStorage.getItem("garden-background");
-  // If user has explicitly picked a background path, use it.
-  // Skip ephemeral blob URLs (they die on page reload) and empty strings.
-  if (stored && !stored.startsWith("blob:") && stored !== "") return stored;
-  // Garden theme always shows moonlight-04.jpg
-  const theme = localStorage.getItem("garden-theme") || "garden";
-  if (theme === "garden") return DEFAULT_BG;
-  // Other scene themes: empty → canvas scene shows through
-  return "";
+  if (typeof window === "undefined") return DEFAULT_BG;
+  try {
+    const stored = localStorage.getItem("garden-background");
+    // If user has explicitly picked a background path, use it.
+    // Skip ephemeral blob URLs (they die on page reload) and empty strings.
+    if (stored && !stored.startsWith("blob:") && stored !== "") return stored;
+    // Garden theme always shows moonlight-04.jpg
+    const theme = localStorage.getItem("garden-theme") || "garden";
+    if (theme === "garden") return DEFAULT_BG;
+    // Other scene themes: empty → canvas scene shows through
+    return "";
+  } catch {
+    return DEFAULT_BG;
+  }
 }
 
 function getStored(): BgState {
@@ -48,7 +53,7 @@ function getStored(): BgState {
   try {
     const src = resolveBgSrc();
     const isVideo = isVideoSrc(src);
-    const opacity = Number(localStorage.getItem("garden-bg-opacity") || 50) / 100;
+    const opacity = Number(localStorage.getItem("garden-bg-opacity") || 25) / 100;
     const blur = Number(localStorage.getItem("garden-bg-blur") || 0);
     const maskColor = localStorage.getItem("garden-bg-mask") || "transparent";
     const maskOpacity = Number(localStorage.getItem("garden-bg-mask-opacity") || 0) / 100;
@@ -71,6 +76,7 @@ export function BackgroundProvider() {
   }));
   const [mounted, setMounted] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Track dark mode via <html> class observer
   useEffect(() => {
@@ -85,6 +91,14 @@ export function BackgroundProvider() {
     };
   }, []);
 
+  // Track mobile viewport
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   // Seed defaults + sync from localStorage
   useEffect(() => {
     if (!localStorage.getItem("garden-theme")) {
@@ -95,7 +109,7 @@ export function BackgroundProvider() {
         localStorage.setItem("garden-background", DEFAULT_BG);
       }
       if (!localStorage.getItem("garden-bg-opacity")) {
-        localStorage.setItem("garden-bg-opacity", "50");
+        localStorage.setItem("garden-bg-opacity", "25");
       }
     }
     const update = () => setBg(getStored());
@@ -161,7 +175,7 @@ export function BackgroundProvider() {
               blurPx !== "0px" ? `blur(${blurPx})` : "",
               isDark ? "brightness(0.50)" : "",
             ].filter(Boolean).join(" ") || "none",
-            transform: "scale(1.05)",
+            transform: isMobile ? "scale(1.0)" : "scale(1.05)",
             opacity: bg.opacity,
             transition: "opacity 0.3s ease, filter 0.5s ease",
           }}

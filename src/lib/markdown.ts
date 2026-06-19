@@ -194,6 +194,11 @@ function renderInlineNode(node: TipTapNode): string {
   if (node.type === "hardBreak") {
     return "\n";
   }
+  if (node.type === "image") {
+    const src = (node.attrs?.src as string) || "";
+    const alt = (node.attrs?.alt as string) || "";
+    return `![${alt}](${src})`;
+  }
   // Nested block in inline context → degrade
   return node.content ? renderChildren(node) : "";
 }

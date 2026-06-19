@@ -40,7 +40,7 @@ function extractCover(content: string | null): string | null {
   return null;
 }
 
-type ViewMode = "list" | "timeline" | "graph" | "calendar";
+type ViewMode = "list" | "timeline" | "graph" | "calendar" | "grid";
 type SortMode = "createdAt" | "updatedAt";
 
 // ── Calendar View ──────────────────────────────────────
@@ -68,9 +68,9 @@ function CalendarView({ entries }: { entries: any[] }) {
   return (
     <div className="garden-card p-4">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth} className="text-xs text-muted-foreground hover:text-foreground interactive">◀</button>
+        <button onClick={prevMonth} className="garden-ctrl-btn-muted interactive">◀</button>
         <span className="text-sm font-medium text-foreground">{year}年{month}月</span>
-        <button onClick={nextMonth} className="text-xs text-muted-foreground hover:text-foreground interactive">▶</button>
+        <button onClick={nextMonth} className="garden-ctrl-btn-muted interactive">▶</button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center">
         {dowLabels.map(d => <div key={d} className="text-[0.625rem] text-muted-foreground py-1">{d}</div>)}
@@ -107,7 +107,7 @@ export default function GardenPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const data = await listEntries(1000);
+      const data = await listEntries(500);
       setEntries(data);
       setLoading(false);
       getGraphData().then(setGraphData);
@@ -135,7 +135,7 @@ export default function GardenPage() {
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter((e) =>
-        e.title.toLowerCase().includes(q) || (e.excerpt || "").toLowerCase().includes(q));
+        e.title.toLowerCase().includes(q) || (e.excerpt || "").toLowerCase().includes(q) || (e.content || "").toLowerCase().includes(q));
     }
     if (typeFilter) result = result.filter((e) => e.type === typeFilter);
     if (tagFilter) result = result.filter((e) => e.tags.some((t) => t.name === tagFilter));
@@ -174,55 +174,119 @@ export default function GardenPage() {
     return Array.from(set).sort((a, b) => b - a);
   }, [entries]);
 
+  // ── Grid density ──────────────────────────────────────
+  const [gridCols, setGridCols] = useState(3);
+
+  // ── Default Cover ────────────────────────────────────
+  const DefaultCover = ({ type }: { type: string }) => {
+    const themes: Record<string, { gradient: string; icon: string; accent: string }> = {
+      Memory:  { gradient: "from-amber-200/40 via-orange-100/30 to-yellow-100/20 dark:from-amber-900/30 dark:via-orange-900/20 dark:to-yellow-900/10", icon: "M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z", accent: "#d4a574" },
+      Thought: { gradient: "from-blue-200/40 via-cyan-100/30 to-sky-100/20 dark:from-blue-900/30 dark:via-cyan-900/20 dark:to-sky-900/10", icon: "M9 21c0 .6.4 1 1 1h4c.6 0 1-.4 1-1v-1H9v1zm3-19C8.1 2 5 5.1 5 9c0 2.4 1.2 4.5 3 5.7V17c0 .6.4 1 1 1h6c.6 0 1-.4 1-1v-2.3c1.8-1.3 3-3.4 3-5.7 0-3.9-3.1-7-7-7z", accent: "#6ea8d9" },
+      Emotion: { gradient: "from-rose-200/40 via-pink-100/30 to-fuchsia-100/20 dark:from-rose-900/30 dark:via-pink-900/20 dark:to-fuchsia-900/10", icon: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z", accent: "#d97a8b" },
+      Dream:   { gradient: "from-violet-200/40 via-purple-100/30 to-indigo-100/20 dark:from-violet-900/30 dark:via-purple-900/20 dark:to-indigo-900/10", icon: "M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 2c3.4 0 6.3 2.1 7.5 5-.8.4-1.7.7-2.5.9.3-.6.5-1.2.5-1.9 0-2.2-1.8-4-4-4-.7 0-1.3.2-1.9.5.2.8.3 1.7.3 2.5z", accent: "#9b7ec4" },
+      Story:   { gradient: "from-emerald-200/40 via-teal-100/30 to-green-100/20 dark:from-emerald-900/30 dark:via-teal-900/20 dark:to-green-900/10", icon: "M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zm-7-1h2v-6h-2v6zm0-8h2V5h-2v2z", accent: "#7a9668" },
+      Learning:{ gradient: "from-teal-200/40 via-cyan-100/30 to-sky-100/20 dark:from-teal-900/30 dark:via-cyan-900/20 dark:to-sky-900/10", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", accent: "#68a0a0" },
+    };
+    const t = themes[type] || themes.Memory;
+    return (
+      <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${t.gradient} relative overflow-hidden`}>
+        {/* Subtle geometric background pattern */}
+        <svg className="absolute inset-0 w-full h-full opacity-[0.04] dark:opacity-[0.06]" viewBox="0 0 60 60">
+          <pattern id={`dot-${type}`} x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="0.8" fill="currentColor" />
+            <circle cx="12" cy="8" r="0.5" fill="currentColor" />
+            <circle cx="6" cy="14" r="0.6" fill="currentColor" />
+          </pattern>
+          <rect width="60" height="60" fill={`url(#dot-${type})`} />
+        </svg>
+        {/* Icon */}
+        <svg className="w-14 h-14 opacity-25 dark:opacity-30 transition-all duration-300 group-hover:opacity-45 group-hover:scale-110" viewBox="0 0 24 24" fill="currentColor" style={{ color: t.accent }}>
+          <path d={t.icon} />
+        </svg>
+      </div>
+    );
+  };
+
   // ── Entry Card ───────────────────────────────────────
 
   const renderCard = (entry: EntrySummary, showRelative: boolean = false) => {
     const cover = extractCover(entry.content);
     return (
     <Link key={entry.id} href={`/entry/${entry.slug}`}
-      className="garden-card flex overflow-hidden hover:shadow-md interactive group">
+      className="garden-card flex flex-col sm:flex-row overflow-hidden hover:shadow-md interactive group">
       {cover && (
-        <div className="w-24 sm:w-32 shrink-0">
+        <div className="w-full sm:w-32 shrink-0 h-36 sm:h-auto">
           <img src={cover} alt="" className="w-full h-full object-cover" loading="lazy" />
         </div>
       )}
-      <div className="flex items-start justify-between gap-2 flex-1 min-w-0 p-4">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
-            {entry.title}
-          </h3>
-          {entry.excerpt && (
-            <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{entry.excerpt}</p>
-          )}
-        </div>
-        <div className="flex flex-col items-end gap-0.5 shrink-0">
-          <span className="text-[0.625rem] text-muted-foreground" title="创建时间">
-            {sortMode === "createdAt"
-              ? (showRelative ? relativeTime(entry.createdAt) : fmtDate(entry.createdAt))
-              : (showRelative ? relativeTime(entry.updatedAt) : fmtDate(entry.updatedAt))
-            }
-          </span>
-          {sortMode === "createdAt" && (
-            <span className="text-[0.625rem] text-muted-foreground/60" title="最近修改">
-              修改 {fmtDate(entry.updatedAt)}
+      <div className="flex-1 min-w-0 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+              {entry.title}
+            </h3>
+            {entry.excerpt && (
+              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{entry.excerpt}</p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
+            <span className="text-[0.625rem] text-muted-foreground whitespace-nowrap" title="创建时间">
+              {sortMode === "createdAt"
+                ? (showRelative ? relativeTime(entry.createdAt) : fmtDate(entry.createdAt))
+                : (showRelative ? relativeTime(entry.updatedAt) : fmtDate(entry.updatedAt))
+              }
             </span>
-          )}
-          {sortMode === "updatedAt" && (
-            <span className="text-[0.625rem] text-muted-foreground/60" title="创建时间">
-              创建 {fmtDate(entry.createdAt)}
-            </span>
-          )}
+            {sortMode === "createdAt" && (
+              <span className="text-[0.625rem] text-muted-foreground/60 whitespace-nowrap" title="最近修改">
+                修改 {fmtDate(entry.updatedAt)}
+              </span>
+            )}
+            {sortMode === "updatedAt" && (
+              <span className="text-[0.625rem] text-muted-foreground/60 whitespace-nowrap" title="创建时间">
+                创建 {fmtDate(entry.createdAt)}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.625rem] text-muted-foreground">
-        <ColoredTag type={entry.type} label={TYPE_LABELS[entry.type] || entry.type} />
-        {entry.tags.slice(0, 3).map((t) => (
-          <span key={t.name} className="text-muted-foreground/70">#{t.name}</span>
-        ))}
-        {entry.tags.length > 3 && <span className="text-muted-foreground/50">+{entry.tags.length - 3}</span>}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[0.625rem] text-muted-foreground">
+          <ColoredTag type={entry.type} label={TYPE_LABELS[entry.type] || entry.type} />
+          {entry.tags.slice(0, 3).map((t) => (
+            <span key={t.name} className="text-muted-foreground/70">#{t.name}</span>
+          ))}
+          {entry.tags.length > 3 && <span className="text-muted-foreground/50">+{entry.tags.length - 3}</span>}
+        </div>
       </div>
     </Link>
   );
+  };
+
+  const renderGridCard = (entry: EntrySummary) => {
+    const cover = extractCover(entry.content);
+    return (
+      <Link key={entry.id} href={`/entry/${entry.slug}`}
+        className="group rounded-xl border border-border bg-card overflow-hidden interactive transition-all duration-300
+          hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/40">
+        {/* Cover */}
+        <div className="aspect-[3/2] bg-muted/50 overflow-hidden relative">
+          {cover ? (
+            <img src={cover} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          ) : (
+            <DefaultCover type={entry.type} />
+          )}
+        </div>
+        {/* Info */}
+        <div className="p-3.5">
+          <h3 className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">{entry.title}</h3>
+          <p className="text-[0.688rem] text-muted-foreground mt-1.5 line-clamp-2">{entry.excerpt || "暂无摘要"}</p>
+          <div className="mt-2.5 flex items-center justify-between text-[0.625rem] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <ColoredTag type={entry.type} label={TYPE_LABELS[entry.type] || entry.type} />
+            </span>
+            <span>{fmtDate(entry.createdAt)}</span>
+          </div>
+        </div>
+      </Link>
+    );
   };
 
   // ── Render ───────────────────────────────────────────
@@ -248,7 +312,7 @@ export default function GardenPage() {
             placeholder="搜索标题或内容…"
             className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
           {search && (
-            <button onClick={() => setSearch("")} className="text-xs text-muted-foreground hover:text-foreground interactive shrink-0">清除</button>
+            <button onClick={() => setSearch("")} className="garden-ctrl-btn-muted shrink-0 interactive">清除</button>
           )}
         </div>
 
@@ -257,7 +321,7 @@ export default function GardenPage() {
           <button
             onClick={() => setSortMode("createdAt")}
             className={`rounded px-2.5 py-1 text-xs interactive transition-colors ${
-              sortMode === "createdAt" ? "bg-card text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
+              sortMode === "createdAt" ? "bg-card text-foreground font-medium shadow-sm" : "bg-card/60 text-muted-foreground hover:text-foreground"
             }`}
           >
             创建时间
@@ -265,7 +329,7 @@ export default function GardenPage() {
           <button
             onClick={() => setSortMode("updatedAt")}
             className={`rounded px-2.5 py-1 text-xs interactive transition-colors ${
-              sortMode === "updatedAt" ? "bg-card text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
+              sortMode === "updatedAt" ? "bg-card text-foreground font-medium shadow-sm" : "bg-card/60 text-muted-foreground hover:text-foreground"
             }`}
           >
             修改时间
@@ -286,14 +350,25 @@ export default function GardenPage() {
           </button>
         ))}
         <div className="flex-1" />
-        <div className="flex items-center gap-0.5 rounded-md border border-border bg-muted/50 p-0.5">
-          {(["timeline", "list", "graph", "calendar"] as ViewMode[]).map((mode) => (
+        <div className="flex flex-wrap items-center gap-0.5 rounded-md border border-border bg-muted/50 p-0.5">
+          {(["timeline", "list", "grid", "graph", "calendar"] as ViewMode[]).map((mode) => (
             <button key={mode} onClick={() => setViewMode(mode)}
-              className={`rounded px-2.5 py-1 text-xs interactive ${viewMode === mode ? "bg-card text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-              {{ timeline: "📅 时间", list: "📋 列表", graph: "🕸 关联", calendar: "🗓 日历" }[mode]}
+              className={`rounded px-2.5 py-1 text-xs interactive ${viewMode === mode ? "bg-card text-foreground font-medium shadow-sm" : "bg-card/60 text-muted-foreground hover:text-foreground"}`}>
+              {{ timeline: "📅 时间", list: "📋 列表", grid: "🪟 格窗", graph: "🕸 关联", calendar: "🗓 日历" }[mode]}
             </button>
           ))}
         </div>
+        {/* Grid column density — only in grid mode */}
+        {viewMode === "grid" && (
+          <div className="flex items-center gap-0.5 ml-2 rounded-md border border-border bg-muted/50 p-0.5">
+            {([2, 3, 4, 5] as number[]).map((n) => (
+              <button key={n} onClick={() => setGridCols(n)}
+                className={`rounded px-1.5 py-1 text-[0.625rem] interactive ${gridCols === n ? "bg-card text-foreground font-medium shadow-sm" : "bg-card/60 text-muted-foreground hover:text-foreground"}`}>
+                {n}列
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tag filter */}
@@ -353,6 +428,8 @@ export default function GardenPage() {
       ) : filtered.length > 0 ? (
         viewMode === "list" ? (
           <div className="space-y-2.5">{filtered.map(e => renderCard(e))}</div>
+        ) : viewMode === "grid" ? (
+          <div className={`grid gap-3 grid-cols-1 ${gridCols===2?"sm:grid-cols-2":gridCols===3?"sm:grid-cols-2 lg:grid-cols-3":gridCols===4?"sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4":"sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"}`}>{filtered.map(e => renderGridCard(e))}</div>
         ) : viewMode === "calendar" ? (
           <CalendarView entries={filtered} />
         ) : viewMode === "graph" ? (

@@ -299,8 +299,8 @@ function BackgroundToggle({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-12 right-0 bg-card/85 backdrop-blur-lg border border-border/60 rounded-2xl p-3 shadow-lg flex gap-2"
-            style={{ minWidth: 200 }}
+            className="absolute bottom-12 right-0 bg-card/85 backdrop-blur-lg border border-border/60 rounded-2xl p-3 shadow-lg flex gap-2 overflow-x-auto"
+            style={{ minWidth: 200, maxWidth: "calc(100vw - 40px)" }}
           >
             {/* CSS 手绘模式 */}
             <button
@@ -383,13 +383,14 @@ function LoginForm() {
   }, []);
 
   // ── 背景偏好 ────────────────────────────────────
-  const [bgMode, setBgMode] = useState<string>("css");
+  const [bgMode, setBgMode] = useState<string>("moonlight");
 
-  // 从 localStorage 恢复
+  // 从 localStorage 恢复（用户主动切换后覆盖默认）
   useEffect(() => {
     try {
       const saved = localStorage.getItem(BG_PREF_KEY);
-      if (saved) setBgMode(saved);
+      if (saved && saved !== "css") setBgMode(saved);
+      else setBgMode("moonlight"); // force default to moonlight
     } catch { /* ignore */ }
   }, []);
 
@@ -473,21 +474,20 @@ function LoginForm() {
 
   // ── 卡片样式 ────────────────────────────────────
   const cardBg = isDark
-    ? "rgba(18,24,16,0.72)"
+    ? "rgba(22,28,20,0.82)"
     : "rgba(255,252,245,0.7)";
   const cardBorder = isDark
-    ? "rgba(255,255,255,0.08)"
+    ? "rgba(255,255,255,0.13)"
     : "rgba(200,180,150,0.3)";
   const cardShadow = isDark
     ? "0 8px 40px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.03)"
     : "0 8px 40px rgba(100,80,40,0.08), 0 2px 8px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.5)";
   const inputBg = isDark
-    ? "rgba(255,255,255,0.04)"
+    ? "rgba(0,0,0,0.35)"
     : "rgba(255,255,255,0.6)";
   const inputBorder = isDark
-    ? "rgba(255,255,255,0.08)"
+    ? "rgba(255,255,255,0.18)"
     : "rgba(180,160,130,0.35)";
-
   return (
     <div className="fixed inset-0 z-[9999] overflow-hidden">
       {/* ── 背景：图片 或 CSS 手绘 ── */}
@@ -546,7 +546,7 @@ function LoginForm() {
       />
 
       {/* ── 卡片容器 ── */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center overflow-y-auto px-2">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -564,7 +564,7 @@ function LoginForm() {
               boxShadow: cardShadow,
             }}
           >
-            <div className="relative px-8 py-8">
+            <div className="relative px-5 sm:px-8 py-6 sm:py-8" style={isDark ? { color: "#d4d4d4" } : {}}>
               {/* 顶部光晕线 */}
               <div
                 className="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-px"
@@ -595,7 +595,7 @@ function LoginForm() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.25, duration: 0.4 }}
-                  className="text-[1.25rem] font-semibold tracking-[-0.01em] text-foreground"
+                  className="text-[1.25rem] font-semibold tracking-[-0.01em] text-foreground dark:text-white"
                 >
                   Digital Garden
                 </motion.h1>
@@ -604,7 +604,7 @@ function LoginForm() {
                   initial={{ opacity: 0, y: 3 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.32, duration: 0.4 }}
-                  className="mt-1.5 text-[0.78rem] leading-relaxed text-muted-foreground/55"
+                  className="mt-1.5 text-[0.78rem] leading-relaxed text-muted-foreground"
                 >
                   {mode === "login"
                     ? "推开花园的门，世界安静下来"
@@ -633,7 +633,7 @@ function LoginForm() {
                       exit={{ height: 0, opacity: 0, marginBottom: 0 }}
                       transition={{ duration: 0.2 }}
                     >
-                      <label className="block text-[0.68rem] text-muted-foreground/55 mb-1.5 ml-1 font-medium">
+                      <label className="block text-[0.68rem] text-muted-foreground mb-1.5 ml-1 font-medium">
                         昵称 <span className="opacity-30">选填</span>
                       </label>
                       <input
@@ -642,7 +642,7 @@ function LoginForm() {
                         onChange={(e) => setDisplayName(e.target.value)}
                         placeholder="如何称呼你？"
                         disabled={loading}
-                        className="w-full rounded-xl border px-4 py-[0.6rem] text-[0.85rem] text-foreground placeholder:text-muted-foreground/20 focus:outline-none focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/8 transition-all duration-200"
+                        className="w-full rounded-xl border px-4 py-[0.6rem] text-[0.85rem] text-foreground placeholder:text-muted-foreground dark:placeholder:text-white/60 focus:outline-none focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/8 transition-all duration-200"
                         style={{ background: inputBg, borderColor: inputBorder }}
                       />
                     </motion.div>
@@ -650,7 +650,7 @@ function LoginForm() {
                 </AnimatePresence>
 
                 <div>
-                  <label className="block text-[0.68rem] text-muted-foreground/55 mb-1.5 ml-1 font-medium">账号</label>
+                  <label className="block text-[0.68rem] text-muted-foreground mb-1.5 ml-1 font-medium">账号</label>
                   <input
                     type="text" name="garden-user"
                     value={username}
@@ -658,13 +658,13 @@ function LoginForm() {
                     placeholder="请输入账号"
                     autoFocus={!searchParams.get("username")}
                     disabled={loading}
-                    className="w-full rounded-xl border px-4 py-[0.6rem] text-[0.85rem] text-foreground placeholder:text-muted-foreground/20 focus:outline-none focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/8 transition-all duration-200"
+                    className="w-full rounded-xl border px-4 py-[0.6rem] text-[0.85rem] text-foreground placeholder:text-muted-foreground dark:placeholder:text-white/60 focus:outline-none focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/8 transition-all duration-200"
                     style={{ background: inputBg, borderColor: inputBorder }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[0.68rem] text-muted-foreground/55 mb-1.5 ml-1 font-medium">密码</label>
+                  <label className="block text-[0.68rem] text-muted-foreground mb-1.5 ml-1 font-medium">密码</label>
                   <input
                     type="password"
                     value={password}
@@ -673,7 +673,7 @@ function LoginForm() {
                     placeholder={mode === "register" ? "设置密码" : "请输入密码"}
                     autoFocus={!!searchParams.get("username")}
                     disabled={loading}
-                    className="w-full rounded-xl border px-4 py-[0.6rem] text-[0.85rem] text-foreground placeholder:text-muted-foreground/20 focus:outline-none focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/8 transition-all duration-200"
+                    className="w-full rounded-xl border px-4 py-[0.6rem] text-[0.85rem] text-foreground placeholder:text-muted-foreground dark:placeholder:text-white/60 focus:outline-none focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/8 transition-all duration-200"
                     style={{ background: inputBg, borderColor: inputBorder }}
                   />
                 </div>
@@ -716,7 +716,7 @@ function LoginForm() {
                 <button
                   onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); setPassword(""); }}
                   disabled={loading}
-                  className="text-[0.78rem] text-muted-foreground/40 hover:text-emerald-600/70 dark:hover:text-emerald-400/60 interactive transition-colors"
+                  className="text-[0.78rem] text-muted-foreground/70 dark:text-white/60 hover:text-emerald-600 dark:hover:text-emerald-400 interactive transition-colors"
                 >
                   {mode === "login" ? "还没有账号？创建 →" : "已有账号？去登录 →"}
                 </button>

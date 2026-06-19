@@ -60,11 +60,18 @@ export function exportMD(title: string, contentMd: string) {
 
 /** Export as Word (.doc) — self-contained HTML that Word can open */
 export function exportWord(title: string, htmlBody: string) {
+  // Convert relative image paths to absolute URLs
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const withAbsoluteImgs = htmlBody.replace(
+    /<img\s+src="(\/[^"]+)"/g,
+    (_, path) => `<img src="${origin}${path}"`
+  );
+
   const wordMeta = `
       xmlns:o="urn:schemas-microsoft-com:office:office"
       xmlns:w="urn:schemas-microsoft-com:office:word"
       xmlns="http://www.w3.org/TR/REC-html40"`;
-  const doc = buildHtmlDoc(title, htmlBody)
+  const doc = buildHtmlDoc(title, withAbsoluteImgs)
     .replace("<html>", `<html ${wordMeta}>`)
     .replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">');
   downloadBlob(doc, `${safeName(title)}.doc`, "application/msword;charset=utf-8");
@@ -72,13 +79,19 @@ export function exportWord(title: string, htmlBody: string) {
 
 /** Export as PDF — uses browser's native PDF engine via print (handles Chinese reliably) */
 export function exportPDF(title: string, htmlBody: string) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const withAbsoluteImgs = htmlBody.replace(
+    /<img\s+src="(\/[^"]+)"/g,
+    (_, path) => `<img src="${origin}${path}"`
+  );
+
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
     alert("请允许弹出窗口以导出 PDF");
     return;
   }
 
-  const doc = buildHtmlDoc(title, htmlBody, `
+  const doc = buildHtmlDoc(title, withAbsoluteImgs, `
     @media print {
       body { margin: 0; padding: 1.5em; }
       @page { margin: 1.5cm; size: A4; }

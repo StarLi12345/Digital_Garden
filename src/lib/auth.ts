@@ -51,9 +51,26 @@ export async function getUserById(userId: string): Promise<UserInfo | null> {
 }
 
 export async function getAllUsers(): Promise<UserInfo[]> {
+  // Return the public display account — always available for switching.
+  const GUEST_ID = "default-user";
   const users = await prisma.user.findMany({
+    where: { id: GUEST_ID },
     select: { id: true, username: true, displayName: true, avatar: true },
     orderBy: { createdAt: "asc" },
+  });
+  return users.map((u) => ({
+    ...u,
+    displayName: u.displayName || u.username,
+    avatar: u.avatar || getDefaultAvatar(u.username),
+  }));
+}
+
+/** Get user info for a list of IDs — used to fetch avatars for account switcher */
+export async function getUsersByIds(ids: string[]): Promise<UserInfo[]> {
+  if (!ids.length) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, username: true, displayName: true, avatar: true },
   });
   return users.map((u) => ({
     ...u,
