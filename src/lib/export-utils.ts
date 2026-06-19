@@ -124,25 +124,20 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
       }
     }
 
-    // ── Render LaTeX: replace placeholders with KaTeX SVG ──
+    // ── Render LaTeX: replace placeholders with KaTeX HTML ──
+    // Note: KaTeX's output: "html" returns <span class="katex">... HTML, NOT SVG.
+    // We embed the HTML directly — no base64 wrapping needed.
     const katex = await getKatex();
     if (katex) {
       for (const lp of latexProtected) {
         try {
-          const svg = katex.renderToString(lp.formula, { throwOnError: false, displayMode: lp.display, output: "html" });
-          const b64 = btoa(unescape(encodeURIComponent(svg)));
+          const rendered = katex.renderToString(lp.formula, { throwOnError: false, displayMode: lp.display, output: "html" });
           if (lp.display) {
-            bodyHtml = bodyHtml.replace(
-              `<p>${lp.placeholder}</p>`,
-              `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="公式" /></div>`
-            );
-            bodyHtml = bodyHtml.replace(lp.placeholder,
-              `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="公式" /></div>`
-            );
+            const block = `<div style="text-align:center;margin:1em 0;font-size:1.1em">${rendered}</div>`;
+            bodyHtml = bodyHtml.replace(`<p>${lp.placeholder}</p>`, block);
+            bodyHtml = bodyHtml.replace(lp.placeholder, block);
           } else {
-            bodyHtml = bodyHtml.replace(lp.placeholder,
-              `<img src="data:image/svg+xml;base64,${b64}" style="vertical-align:middle" alt="公式" />`
-            );
+            bodyHtml = bodyHtml.replace(lp.placeholder, rendered);
           }
         } catch { /* keep placeholder text */ }
       }
@@ -176,6 +171,7 @@ function buildHtmlDoc(title: string, htmlBody: string, extraStyle = ""): string 
   mark { padding: 0.05em 0.15em; border-radius: 2px; }
   ${extraStyle}
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
 </head>
 <body>
 <h1>${title}</h1>
