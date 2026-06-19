@@ -23,6 +23,14 @@ async function getKatex() {
 /** Escape HTML entities */
 function escapeHtml(s: string) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
+/** Convert SVG string to a data URI for <img> src */
+function svgToDataUri(svg: string): string {
+  const bytes = new TextEncoder().encode(svg);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return "data:image/svg+xml;base64," + btoa(binary);
+}
+
 /** Get origin for resolving relative paths */
 function getOrigin(): string {
   if (typeof window !== "undefined") return window.location.origin;
@@ -116,7 +124,7 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
             try {
               const id = "exp-" + Math.random().toString(36).slice(2, 8);
               const { svg } = await mermaid.render(id, match.code);
-              const b64 = btoa(unescape(encodeURIComponent(svg)));
+              const b64 = svgToDataUri(svg);
               bodyHtml = bodyHtml.replace(match.original, `<div style="text-align:center;margin:1em 0"><img src="data:image/svg+xml;base64,${b64}" style="max-width:100%" alt="图表" /></div>`);
             } catch { /* keep original */ }
           }
@@ -130,7 +138,7 @@ export async function generateExportHtml(title: string, contentMd: string): Prom
       for (const lp of latexProtected) {
         try {
           const svg = katex.renderToString(lp.formula, { throwOnError: false, displayMode: lp.display, output: "html" });
-          const b64 = btoa(unescape(encodeURIComponent(svg)));
+          const b64 = svgToDataUri(svg);
           if (lp.display) {
             bodyHtml = bodyHtml.replace(
               `<p>${lp.placeholder}</p>`,
@@ -205,7 +213,7 @@ export async function exportMD(title: string, contentMd: string) {
           try {
             const id = "md-" + Math.random().toString(36).slice(2, 8);
             const { svg } = await mermaid.render(id, match.code);
-            const b64 = btoa(unescape(encodeURIComponent(svg)));
+            const b64 = svgToDataUri(svg);
             const imgMarkdown = `![图表](data:image/svg+xml;base64,${b64})`;
             md = md.replace(match.original, imgMarkdown);
           } catch { /* keep original code */ }
