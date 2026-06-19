@@ -71,11 +71,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read theme cookie for server-side class application (prevents flash)
+  // Read theme cookie for server-side class application (prevents flash).
+  // Default to dark mode on first visit — client-side ThemeProvider will
+  // correct it if user/system prefers light.
   const cookieStore = await cookies();
-  const theme = cookieStore.get("theme")?.value ?? "system";
+  const theme = cookieStore.get("theme")?.value;
   const gardenTheme = cookieStore.get("garden-theme")?.value ?? "garden";
-  const isDark = theme === "dark";
+  const isDark = theme !== "light"; // no cookie = dark by default
 
   return (
     <html
