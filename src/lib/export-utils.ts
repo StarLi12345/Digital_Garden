@@ -1,10 +1,12 @@
 // ============================================================
 // Digital Garden — Export Utilities
 // ============================================================
-// MD  → 下载 .md 文件（图片路径转为绝对 URL）
-// Word → 下载 .doc 文件（自包含 HTML，图片路径绝对化）
-// PDF  → 浏览器打印（选择「另存为 PDF」即可下载）
+// MD  → 下载 .md 文件（图片路径绝对化）
+// Word → 下载 .doc 文件（Markdown→HTML，自包含）
+// PDF  → jsPDF 直接下载，不弹打印框
 // ============================================================
+
+import { marked } from "marked";
 
 /** Get origin for resolving relative paths */
 function getOrigin(): string {
@@ -49,6 +51,12 @@ function absolutizeMdPaths(md: string): string {
     /(!\[[^\]]*\])\((\/[^)]+)\)/g,
     (_, imgTag, path) => `${imgTag}(${origin}${path})`
   );
+}
+
+/** Generate export-ready HTML from markdown content */
+export function generateExportHtml(title: string, contentMd: string): string {
+  const bodyHtml = marked.parse(contentMd, { async: false }) as string;
+  return buildHtmlDoc(title, bodyHtml);
 }
 
 /** Build a complete HTML document for rich export */

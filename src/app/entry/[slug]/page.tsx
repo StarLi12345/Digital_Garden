@@ -21,8 +21,8 @@ import { TocHighlighter } from "@/components/editor/toc-highlighter";
 import type { EditorChangePayload } from "@/components/editor/tiptap-editor";
 import { countWords, readingTimeMinutes } from "@/lib/word-count";
 import { getEntryBySlug, updateEntry, deleteEntry, getBacklinks, getOutlinks, getLinkStats } from "@/actions/entry-actions";
-import { exportMD, exportWord, exportPDF } from "@/lib/export-utils";
-import { jsonToHtml, sanitizeNode } from "@/lib/tiptap-render";
+import { exportMD, exportWord, exportPDF, generateExportHtml } from "@/lib/export-utils";
+import { sanitizeNode } from "@/lib/tiptap-render";
 import { jsonToMarkdown } from "@/lib/markdown";
 import { TYPE_LABELS } from "@/lib/constants";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -383,7 +383,7 @@ export default function EntryPage({ params }: EntryPageProps) {
               <button
                 onClick={() => {
                   try {
-                    const html = jsonToHtml(JSON.parse(entry.content));
+                    const html = generateExportHtml(entry.title, entry.contentMd);
                     exportWord(entry.title, html);
                   } catch {}
                 }}
@@ -394,7 +394,7 @@ export default function EntryPage({ params }: EntryPageProps) {
               <button
                 onClick={async () => {
                   try {
-                    const html = jsonToHtml(JSON.parse(entry.content));
+                    const html = generateExportHtml(entry.title, entry.contentMd);
                     await exportPDF(entry.title, html);
                   } catch {}
                 }}
