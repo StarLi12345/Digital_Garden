@@ -229,25 +229,31 @@ export function exportPDF(title: string, htmlBody: string) {
   printWindow.document.close();
 
   printWindow.onload = () => {
-    // Show instruction overlay, then trigger print
-    const hint = printWindow.document.createElement("div");
-    hint.style.cssText =
-      "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a1a1a;color:#fff;padding:16px 28px;border-radius:10px;font-size:16px;z-index:9999;pointer-events:none;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);";
-    hint.innerHTML = "📄 在打印对话框中选择<b>「另存为 PDF」</b><br><span style='font-size:13px;color:#aaa;margin-top:8px;display:inline-block'>即可保存为 PDF 文件</span>";
-    printWindow.document.body.appendChild(hint);
-
-    // Pre-load images
     const imgs = printWindow.document.querySelectorAll("img");
     let loaded = 0;
     const total = imgs.length;
-    const trigger = () => {
-      setTimeout(() => { hint.remove(); printWindow.print(); }, 800);
+
+    const tryPrint = () => {
+      const hint = printWindow.document.createElement("div");
+      hint.style.cssText = "position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999;pointer-events:none;";
+      hint.textContent = "请在打印对话框中选择「另存为 PDF」→ 保存";
+      printWindow.document.body.appendChild(hint);
+      setTimeout(() => { hint.remove(); printWindow.print(); }, 1500);
     };
-    if (total === 0) { trigger(); return; }
+
+    if (total === 0) {
+      tryPrint();
+      return;
+    }
     imgs.forEach((img) => {
-      if (img.complete) { loaded++; if (loaded === total) trigger(); }
-      else { img.addEventListener("load", () => { loaded++; if (loaded === total) trigger(); }); img.addEventListener("error", () => { loaded++; if (loaded === total) trigger(); }); }
+      if (img.complete) {
+        loaded++;
+        if (loaded === total) tryPrint();
+      } else {
+        img.addEventListener("load", () => { loaded++; if (loaded === total) tryPrint(); });
+        img.addEventListener("error", () => { loaded++; if (loaded === total) tryPrint(); });
+      }
     });
-    setTimeout(() => { if (loaded < total) trigger(); }, 5000);
+    setTimeout(() => { if (loaded < total) tryPrint(); }, 5000);
   };
 }
