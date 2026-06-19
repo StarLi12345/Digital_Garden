@@ -23,7 +23,7 @@ async function getKatex() {
 /** Escape HTML entities */
 function escapeHtml(s: string) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
-/** Convert SVG string to PNG data URI (for Word compatibility) */
+/** Convert SVG string to PNG data URI at 2x resolution (for Word compatibility) */
 function svgToPng(svg: string): Promise<string> {
   return new Promise((resolve) => {
     try {
@@ -31,14 +31,22 @@ function svgToPng(svg: string): Promise<string> {
       const uri = `data:image/svg+xml;base64,${b64}`;
       const img = new Image();
       img.onload = () => {
+        const scale = 2; // 2x for sharp rendering in Word
+        const w = Math.max(img.naturalWidth || 800, 400);
+        const h = Math.max(img.naturalHeight || 600, 200);
         const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth || 800;
-        canvas.height = img.naturalHeight || 600;
+        canvas.width = w * scale;
+        canvas.height = h * scale;
         const ctx = canvas.getContext("2d");
-        if (ctx) { ctx.drawImage(img, 0, 0); resolve(canvas.toDataURL("image/png")); }
-        else { resolve(uri); }
+        if (ctx) {
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/png"));
+        } else {
+          resolve(uri);
+        }
       };
-      img.onerror = () => resolve(uri); // fallback to SVG URI
+      img.onerror = () => resolve(uri);
       img.src = uri;
     } catch { resolve(""); }
   });
