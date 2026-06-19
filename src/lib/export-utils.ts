@@ -71,53 +71,56 @@ function absolutizeMdPaths(md: string): string {
 /** Generate export-ready HTML — renders mermaid/LaTeX as SVG inline */
 export async function generateExportHtml(title: string, contentMd: string): Promise<string> {
   let bodyHtml = marked.parse(contentMd, { async: false }) as string;
+  let mermaidLoaded = false;
 
   try {
     // ── Render mermaid code blocks as SVG ──
-    const mermaidRegex = /<code class="language-mermaid">([\s\S]*?)<\/code>/g;
-    const mermaidMatches: { original: string; code: string }[] = [];
-    let m;
-    while ((m = mermaidRegex.exec(bodyHtml)) !== null) {
-      mermaidMatches.push({ original: m[0], code: m[1] });
-    }
-    if (mermaidMatches.length > 0) {
-      const mermaid = await getMermaid();
-      if (mermaid) {
-        mermaid.initialize({ startOnLoad: false, theme: "default" });
-        for (const match of mermaidMatches) {
-          try {
-            const id = "exp-" + Math.random().toString(36).slice(2, 8);
-            const { svg } = await mermaid.render(id, match.code);
-            bodyHtml = bodyHtml.replace(match.original, `<div style="text-align:center;margin:1em 0">${svg}</div>`);
-          } catch { /* keep original code */ }
+    // Try multiple patterns since marked's output varies
+    const patterns = [
+      /<code class="language-mermaid">([\s\S]*?)<\/code>/g,
+      /<pre><code>((?:graph |sequenceDiagram|gantt\b|stateDiagram|pie title|mindmap)[\s\S]*?)<\/code><\/pre>/g,
+    ];
+    for (const regex of patterns) {
+      const matches: { original: string; code: string }[] = [];
+      let m;
+      regex.lastIndex = 0;
+      while ((m = regex.exec(bodyHtml)) !== null) {
+        matches.push({ original: m[0], code: m[1] });
+      }
+      if (matches.length > 0 && !mermaidLoaded) {
+        const mermaid = await getMermaid();
+        if (mermaid) {
+          mermaidLoaded = true;
+          mermaid.initialize({ startOnLoad: false, theme: "default" });
+          for (const match of matches) {
+            try {
+              const id = "exp-" + Math.random().toString(36).slice(2, 8);
+              const { svg } = await mermaid.render(id, match.code);
+              bodyHtml = bodyHtml.replace(match.original, `<div style="text-align:center;margin:1em 0">${svg}</div>`);
+            } catch { /* keep original */ }
+          }
         }
       }
     }
 
-    // ── Render LaTeX formulas as inline SVG ──
-    // Block-level: $$...$$
-    const latexBlockRegex = /\$\$([\s\S]*?)\$\$/g;
+    // ── Render LaTeX formulas as SVG ──
     const katex = await getKatex();
     if (katex) {
-      bodyHtml = bodyHtml.replace(latexBlockRegex, (_, formula) => {
+      // Block $$...$$ — may have HTML entities from marked
+      bodyHtml = bodyHtml.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula: string) => {
         try {
-          const svg = katex.renderToString(formula.trim(), { throwOnError: false, displayMode: true, output: "html" });
+          const clean = formula.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
+          const svg = katex.renderToString(clean, { throwOnError: false, displayMode: true, output: "html" });
           return `<div style="text-align:center;margin:1em 0;font-size:1.1em">${svg}</div>`;
         } catch { return _; }
       });
-      // Inline: $...$
-      bodyHtml = bodyHtml.replace(/\$([^$\n]+?)\$/g, (_, formula) => {
+      // Inline $...$
+      bodyHtml = bodyHtml.replace(/\$([^$\n]+?)\$/g, (_, formula: string) => {
         try {
-          return katex.renderToString(formula.trim(), { throwOnError: false, displayMode: false, output: "html" });
+          const clean = formula.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
+          return katex.renderToString(clean, { throwOnError: false, displayMode: false, output: "html" });
         } catch { return _; }
       });
-    }
-
-    // ── Also handle raw <pre><code> that marked might produce ──
-    // (marked may or may not wrap mermaid in language-mermaid class)
-    const extraMermaidRegex = /<pre><code>((?:graph |sequenceDiagram|gantt|stateDiagram|pie|mindmap)[\s\S]*?)<\/code><\/pre>/g;
-    if (mermaidMatches.length > 0) {
-      // Already handled if marked detected the language
     }
   } catch { /* keep original content on error */ }
 
