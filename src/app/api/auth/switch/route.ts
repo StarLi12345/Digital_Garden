@@ -58,10 +58,8 @@ export async function POST(request: Request) {
   response.cookies.set(SESSION_COOKIE, user.id, cookieOpts);
   response.cookies.set("garden-user-id", user.id, { ...cookieOpts, httpOnly: false });
 
-  // Set auth cookie for real accounts, clear for public
-  if (body.userId !== PUBLIC_ACCOUNT_ID) {
-    response.cookies.set("garden-auth", "verified", { ...cookieOpts, httpOnly: false });
-  }
+  // Set auth cookie for all accounts — even public ones need write access for their owner
+  response.cookies.set("garden-auth", "verified", { ...cookieOpts, httpOnly: false });
 
   return response;
 }
