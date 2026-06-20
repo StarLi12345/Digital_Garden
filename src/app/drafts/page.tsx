@@ -45,42 +45,12 @@ export default function DraftsPage() {
 
   useEffect(() => {
     setDrafts(loadDrafts());
-    // Also load server-side drafts (for logged-in users, cross-device sync)
-    import("@/actions/entry-actions").then(({ loadDraftsFromServer }) => {
-      loadDraftsFromServer().then((serverDrafts) => {
-        if (serverDrafts.length === 0) return;
-        setDrafts((prev) => {
-          const existing = new Set(prev.map((d) => d.id));
-          const merged = [...prev];
-          for (const sd of serverDrafts) {
-            const id = sd.slug.replace("draft-", "");
-            if (!existing.has(id)) {
-              merged.push({
-                id,
-                name: sd.title,
-                createdAt: new Date(sd.updatedAt).getTime(),
-                form: {
-                  title: sd.title, type: sd.type || "Memory", tags: sd.tags || [],
-                  content: (() => { try { return JSON.parse(sd.content); } catch { return null; } })(),
-                  contentMd: sd.contentMd, coverImage: sd.coverImage,
-                },
-              });
-            }
-          }
-          return merged;
-        });
-      }).catch(() => {});
-    });
   }, []);
 
   const handleDelete = (id: string) => {
     const updated = drafts.filter((d) => d.id !== id);
     setDrafts(updated);
     saveDrafts(updated);
-    // Also delete server-side draft
-    import("@/actions/entry-actions").then(({ deleteDraftFromServer }) => {
-      deleteDraftFromServer(id).catch(() => {});
-    });
   };
 
   const handleLoad = (draft: Draft) => {
