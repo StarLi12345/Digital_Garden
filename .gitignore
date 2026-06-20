@@ -86,3 +86,4 @@ desktop.ini
 
 # MeloTTS (nested git repo, large model files)
 melotts-server/
+*.tar.gz
