@@ -770,3 +770,114 @@ export async function getGardenStats(): Promise<{
     return { entryCount: 0, tagCount: 0, tagFreq: [] };
   }
 }
+
+// ============================================================
+// Server-Side Drafts (synced across devices for logged-in users)
+// ============================================================
+
+export interface DraftData {
+  slug: string;
+  title: string;
+  content: string;
+  contentMd: string;
+  type: string;
+  tags: string[];
+  coverImage: string | null;
+  updatedAt: Date;
+}
+
+/** Save a draft to the server (logged-in users only) */
+export async function saveDraftToServer(
+  draftId: string,
+  data: {
+    title: string;
+    type: string;
+    tags: string[];
+    content: string;
+    contentMd: string;
+    coverImage: string | null;
+  }
+) {
+  const userId = await requireAuth();
+  if (!userId) return { success: false, error: "请先登录" };
+
+  try {
+    const slug = `draft-${draftId}`;
+    const existing = await prisma.entry.findUnique({ where: { slug } });
+
+    if (existing) {
+      await prisma.entry.update({
+        where: { slug },
+        data: {
+          title: data.title || "未命名草稿",
+          type: "Draft",
+          content: data.content,
+          contentMd: data.contentMd,
+          isPrivate: true,
+        },
+      });
+    } else {
+      await prisma.entry.create({
+        data: {
+          slug,
+          title: data.title || "未命名草稿",
+          type: "Draft",
+          content: data.content,
+          contentMd: data.contentMd,
+          userId,
+          isPrivate: true,
+        },
+      });
+    }
+    return { success: true };
+  } catch (e) {
+    console.error("saveDraftToServer failed:", e);
+    return { success: false, error: "保存草稿失败" };
+  }
+}
+
+/** Load all server-side drafts for the logged-in user */
+export async function loadDraftsFromServer(): Promise<DraftData[]> {
+  const userId = await requireAuth();
+  if (!userId) return [];
+
+  try {
+    const entries = await prisma.entry.findMany({
+      where: { userId, type: "Draft" },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        slug: true, title: true, content: true, contentMd: true,
+        type: true, updatedAt: true,
+        tags: { include: { tag: { select: { name: true } } } },
+      },
+      take: 50,
+    });
+    return entries.map((e) => ({
+      slug: e.slug,
+      title: e.title,
+      content: e.content,
+      contentMd: e.contentMd,
+      type: e.type,
+      tags: e.tags.map((t) => t.tag.name),
+      coverImage: null,
+      updatedAt: e.updatedAt,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Delete a server-side draft */
+export async function deleteDraftFromServer(draftId: string) {
+  const userId = await requireAuth();
+  if (!userId) return { success: false, error: "请先登录" };
+
+  try {
+    await prisma.entry.deleteMany({
+      where: { slug: `draft-${draftId}`, userId, type: "Draft" },
+    });
+    return { success: true };
+  } catch {
+    return { success: false, error: "删除失败" };
+  }
+}

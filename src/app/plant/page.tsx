@@ -19,7 +19,7 @@ import { EditorFontSize } from "@/components/editor/editor-font-size";
 import { SourceMode } from "@/components/editor/source-mode";
 import SyntaxHelp from "@/components/editor/syntax-help";
 import type { EditorChangePayload } from "@/components/editor/tiptap-editor";
-import { createEntry } from "@/actions/entry-actions";
+import { createEntry, saveDraftToServer } from "@/actions/entry-actions";
 import { jsonToMarkdown } from "@/lib/markdown";
 import { toast } from "@/components/ui/toast";
 
@@ -159,6 +159,24 @@ function PlantPageInner() {
           updated = [...prev, newDraft];
         }
         saveDrafts(updated);
+
+        // Also sync to server (silent, best-effort)
+        if (form.title || form.content) {
+          const draft = currentDraftId
+            ? updated.find((d) => d.id === currentDraftId)
+            : updated[updated.length - 1];
+          if (draft) {
+            saveDraftToServer(draft.id.replace("draft-", ""), {
+              title: form.title,
+              type: form.type,
+              tags: form.tags,
+              content: form.content ? JSON.stringify(form.content) : "",
+              contentMd: form.contentMd,
+              coverImage: form.coverImage,
+            }).catch(() => {});
+          }
+        }
+
         return updated;
       });
     }, DRAFT_DEBOUNCE_MS);
