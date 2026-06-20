@@ -17,7 +17,7 @@ import { fetchModelManifest, type ModelManifestEntry } from "@/lib/model-registr
 // Re-add when re-enabled: TTS_VOICE_PRESETS, getStoredVoice, setStoredVoice, getFishAudioConfig, setFishAudioConfig, type TTSVoice
 import GardenSlider from "@/components/ui/garden-slider";
 import { Switch } from "@/components/ui/garden-widgets";
-import { persistFile, loadPersistedFile, storeBannerImage, removeBannerImage, loadBannerImage } from "@/lib/file-storage";
+import { persistFile, loadPersistedFile, storeBannerImage, removeBannerImage, loadBannerImage, storeBackgroundImage, loadBackgroundImage, removeBackgroundImage } from "@/lib/file-storage";
 import { Live2DPreview } from "@/components/ui/live2d-preview";
 
 // ── Helpers ──────────────────────────────────────────
@@ -293,16 +293,26 @@ function BackgroundInline() {
     if (!isValidImageOrVideo(file)) { setUploadMsg("❌ 格式不支持"); return; }
     setUploading(true); setUploadMsg("⏳...");
     try {
-      // Immediate display via blob URL
-      const blobUrl = createFileURL(file); applyBg(blobUrl);
-      // Persist via IndexedDB (handles large files)
+      // Read as data URL for immediate display + persistence
+      const dataUrl = await readFileAsDataURL(file);
+      // Apply immediately (data URLs work in CSS background-image)
+      applyBg(dataUrl);
+      // Persist in IndexedDB (same pattern as banner — reliable for large files)
       try {
-        const key = await persistFile("bg", file);
-        const url = await loadPersistedFile(key);
-        if (url) { applyBg(url); setStoredBackground(url); setUploadMsg("✓"); }
-        else { setUploadMsg("✓"); }
+        await storeBackgroundImage(dataUrl);
+        setUploadMsg("✓");
       } catch { setUploadMsg("✓"); }
-    } catch { setUploadMsg("❌ 失败"); }
+    } catch (e: any) {
+      // Fallback: try blob URL for display only (won't persist across reload)
+      if (e?.message?.includes("过大")) {
+        const blobUrl = createFileURL(file);
+        applyBg(blobUrl);
+        try { await storeBackgroundImage(blobUrl); } catch {}
+        setUploadMsg("⚠️ 仅本次有效");
+      } else {
+        setUploadMsg("❌ 失败");
+      }
+    }
     finally { setUploading(false); if (msgTimerRef.current != null) clearTimeout(msgTimerRef.current); msgTimerRef.current = setTimeout(() => setUploadMsg(""), 2500); }
   };
 
@@ -340,7 +350,7 @@ function BackgroundInline() {
 
       {/* Opacity + blur */}
       <SliderPair />{/* defined below to use live state */}
-      {selected && <button onClick={() => applyBg("")} className="text-[0.625rem] text-muted-foreground hover:text-foreground interactive">✕ 清除背景</button>}
+      {selected && <button onClick={() => { applyBg(""); removeBackgroundImage().catch(() => {}); }} className="text-[0.625rem] text-muted-foreground hover:text-foreground interactive">✕ 清除背景</button>}
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ENTRY_TYPES, EXCERPT_MAX_LENGTH, DEFAULT_PAGE_SIZE } from "@/lib/constants";
 import { SESSION_COOKIE } from "@/lib/auth";
+import { validateSession, getSessionToken } from "@/lib/session";
 
 async function getUserId(): Promise<string | null> {
   try {
@@ -30,13 +31,27 @@ async function getUserId(): Promise<string | null> {
   }
 }
 
-/** Require real auth (not guest mode) for write operations */
+/** Require real auth (not guest mode) for write operations.
+ *  Also validates device session token if present (post-migration). */
 async function requireAuth(): Promise<string | null> {
   try {
     const cookieStore = await cookies();
     const auth = cookieStore.get("garden-auth")?.value;
     if (!auth || auth !== "verified") return null;
-    return cookieStore.get(SESSION_COOKIE)?.value ?? null;
+
+    const sessionUserId = cookieStore.get(SESSION_COOKIE)?.value;
+    if (!sessionUserId) return null;
+
+    // Validate device session token (kicks out old sessions on same device)
+    const sessionToken = await getSessionToken();
+    if (sessionToken) {
+      const validUserId = await validateSession(sessionToken);
+      // Session token must match the cookie's userId to prevent cross-user writes
+      if (!validUserId || validUserId !== sessionUserId) return null;
+    }
+    // If no session token, fall back to legacy behavior (pre-migration sessions)
+
+    return sessionUserId;
   } catch {
     return null;
   }
@@ -403,7 +418,9 @@ export async function listEntries(limit = DEFAULT_PAGE_SIZE) {
   try {
     const userId = await getUserId();
     const entries = await prisma.entry.findMany({
-      where: userId ? { userId } : { user: { visibility: "public" } },
+      where: userId
+        ? { userId, type: { not: "Draft" } }
+        : { user: { visibility: "public" }, type: { not: "Draft" } },
       orderBy: { updatedAt: "desc" },
       take: limit,
       select: {
@@ -450,6 +467,7 @@ export async function searchEntries(query: string) {
     const entries = await prisma.entry.findMany({
       where: {
         ...(userId ? { userId } : {}),
+        type: { not: "Draft" },
         OR: [
           { title: { contains: query } },
           { excerpt: { contains: query } },
@@ -681,7 +699,9 @@ export async function deleteEntry(slug: string): Promise<{ success: boolean; err
 export async function getGardenMemory(): Promise<EntryResult["data"] | null> {
   try {
     const userId = await getUserId();
-    const baseWhere = userId ? { userId } : {};
+    const baseWhere = userId
+      ? { userId, type: { not: "Draft" } as const }
+      : { type: { not: "Draft" } as const };
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -746,7 +766,9 @@ export async function getGardenStats(): Promise<{
 }> {
   try {
     const userId = await getUserId();
-    const where = userId ? { userId } : { user: { visibility: "public" } };
+    const where = userId
+      ? { userId, type: { not: "Draft" } as const }
+      : { user: { visibility: "public" }, type: { not: "Draft" } as const };
 
     const entryCount = await prisma.entry.count({ where });
 
@@ -768,5 +790,119 @@ export async function getGardenStats(): Promise<{
   } catch (error) {
     console.error("getGardenStats failed:", error);
     return { entryCount: 0, tagCount: 0, tagFreq: [] };
+  }
+}
+
+// ============================================================
+// Server-Side Drafts (cross-device sync for logged-in users)
+// ============================================================
+
+export interface DraftData {
+  slug: string;
+  title: string;
+  content: string;
+  contentMd: string;
+  type: string;
+  tags: string[];
+  coverImage: string | null;
+  updatedAt: Date;
+}
+
+/** Save a draft to the server (logged-in users only, best-effort) */
+export async function saveDraftToServer(
+  draftId: string,
+  data: {
+    title: string;
+    type: string;
+    tags: string[];
+    content: string;
+    contentMd: string;
+    coverImage: string | null;
+  }
+) {
+  const userId = await requireAuth();
+  if (!userId) return { success: false, error: "请先登录" };
+
+  try {
+    const slug = `draft-${draftId}`;
+    const existing = await prisma.entry.findUnique({ where: { slug } });
+
+    if (existing) {
+      await prisma.entry.update({
+        where: { slug },
+        data: {
+          title: data.title || "未命名草稿",
+          type: "Draft",
+          content: data.content,
+          contentMd: data.contentMd,
+          isPrivate: true,
+        },
+      });
+    } else {
+      await prisma.entry.create({
+        data: {
+          slug,
+          title: data.title || "未命名草稿",
+          type: "Draft",
+          content: data.content,
+          contentMd: data.contentMd,
+          userId,
+          isPrivate: true,
+        },
+      });
+    }
+    console.log(`[draft] Synced to server: draft:${draftId}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[draft] saveDraftToServer failed:", e);
+    return { success: false, error: "保存草稿失败" };
+  }
+}
+
+/** Load all server-side drafts for the logged-in user */
+export async function loadDraftsFromServer(): Promise<DraftData[]> {
+  const userId = await requireAuth();
+  if (!userId) return [];
+
+  try {
+    const entries = await prisma.entry.findMany({
+      where: { userId, type: "Draft" },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        slug: true, title: true, content: true, contentMd: true,
+        type: true, updatedAt: true,
+        tags: { include: { tag: { select: { name: true } } } },
+      },
+      take: 50,
+    });
+    const drafts = entries.map((e) => ({
+      slug: e.slug,
+      title: e.title,
+      content: e.content,
+      contentMd: e.contentMd,
+      type: e.type,
+      tags: e.tags.map((t) => t.tag.name),
+      coverImage: null,
+      updatedAt: e.updatedAt,
+    }));
+    if (drafts.length > 0) console.log(`[draft] Loaded ${drafts.length} server drafts for user ${userId}`);
+    return drafts;
+  } catch {
+    return [];
+  }
+}
+
+/** Delete a server-side draft */
+export async function deleteDraftFromServer(draftId: string) {
+  const userId = await requireAuth();
+  if (!userId) return { success: false, error: "请先登录" };
+
+  try {
+    await prisma.entry.deleteMany({
+      where: { slug: `draft-${draftId}`, userId, type: "Draft" },
+    });
+    return { success: true };
+  } catch {
+    return { success: false, error: "删除失败" };
   }
 }

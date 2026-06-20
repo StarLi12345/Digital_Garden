@@ -173,6 +173,9 @@ export function MusicPlayer() {
   const moveDist = useRef(0);
 
   const onDown = (e: React.PointerEvent) => {
+    // 不拦截 range 滑块的原生拖拽交互
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT") return;
     e.preventDefault(); // prevent text selection while dragging
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragRef.current = { sx: e.clientX, sy: e.clientY, fx: fracRef.current.x, fy: fracRef.current.y, active: true };

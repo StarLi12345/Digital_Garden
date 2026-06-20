@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword, SESSION_COOKIE, SESSION_DURATION, UserInfo, getDefaultAvatar } from "@/lib/auth";
+import { createSession, sessionCookieOpts } from "@/lib/session";
 
 export async function POST(request: Request) {
   let body: { username?: string; password?: string };
@@ -33,6 +34,9 @@ export async function POST(request: Request) {
   // Update lastLoginAt
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
 
+  // Create device session (kicks out old session on same device)
+  const sessionToken = await createSession(user.id, request).catch(() => null);
+
   const response = NextResponse.json({ success: true, user: userInfo });
   const cookieOpts = {
     httpOnly: true,
@@ -46,6 +50,10 @@ export async function POST(request: Request) {
   response.cookies.set("garden-user-id", user.id, { ...cookieOpts, httpOnly: false });
   // Auth marker: real login, not guest mode
   response.cookies.set("garden-auth", "verified", { ...cookieOpts, httpOnly: false });
+  // Session token for device-based write validation
+  if (sessionToken) {
+    response.cookies.set("garden-session-id", sessionToken, sessionCookieOpts(request));
+  }
 
   return response;
 }

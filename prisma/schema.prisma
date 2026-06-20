@@ -32,6 +32,29 @@ model User {
   updatedAt    DateTime @updatedAt
 
   entries      Entry[]
+  sessions     Session[]
+}
+
+// ─────────────────────────────────────────────
+// Session — 设备级别会话管理
+// ─────────────────────────────────────────────
+// 同一用户可在不同设备（手机/电脑/平板）同时登录，
+// 但同一设备（同 deviceKey）只能有一个活跃 session。
+// 新登录自动踢掉同设备的旧 session。
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  deviceKey  String   // sha256(IP + "|" + OS)
+  token      String   @unique
+  deviceName String?  // "Windows Chrome" 等人性化名称
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceKey])  // 一人一设备最多一个活跃 session
+  @@index([token])
 }
 
 // ─────────────────────────────────────────────

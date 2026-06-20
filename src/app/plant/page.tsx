@@ -19,7 +19,7 @@ import { EditorFontSize } from "@/components/editor/editor-font-size";
 import { SourceMode } from "@/components/editor/source-mode";
 import SyntaxHelp from "@/components/editor/syntax-help";
 import type { EditorChangePayload } from "@/components/editor/tiptap-editor";
-import { createEntry } from "@/actions/entry-actions";
+import { createEntry, saveDraftToServer, deleteDraftFromServer } from "@/actions/entry-actions";
 import { jsonToMarkdown } from "@/lib/markdown";
 import { toast } from "@/components/ui/toast";
 
@@ -105,7 +105,7 @@ function PlantPageInner() {
 
   const [validation, setValidation] = useState<{ title?: string; content?: string }>({});
   const [sourceMode, setSourceMode] = useState(false);
-  const canSave = form.title.trim().length > 0 && form.content !== null && form.contentMd.trim().length > 0;
+  const canSave = form.title.trim().length > 0 && form.contentMd.trim().length > 0;
 
   // Word count
   const wordCount = countWords(form.contentMd);
@@ -159,6 +159,20 @@ function PlantPageInner() {
           updated = [...prev, newDraft];
         }
         saveDrafts(updated);
+
+        // 同步到服务器（fire-and-forget，仅登录用户生效）
+        const draft = updated.find((d) => d.id === (currentDraftId || updated[updated.length - 1]?.id));
+        if (draft) {
+          saveDraftToServer(draft.id.replace("draft-", ""), {
+            title: form.title,
+            type: form.type,
+            tags: form.tags,
+            content: form.content ? JSON.stringify(form.content) : "",
+            contentMd: form.contentMd,
+            coverImage: form.coverImage,
+          }).catch(() => {});
+        }
+
         return updated;
       });
     }, DRAFT_DEBOUNCE_MS);
@@ -208,75 +222,92 @@ function PlantPageInner() {
     setForm((p) => ({ ...p, coverImage: url }));
   }, []);
 
-  const handleSave = useCallback(async () => {
-    const v: { title?: string; content?: string } = {};
-    if (!form.title.trim()) v.title = "请输入标题";
-    if (!form.content || !form.contentMd.trim()) v.content = "请输入正文内容";
-    if (Object.keys(v).length > 0) { setValidation(v); return; }
+  // 通过 ref 始终拿到最新的 form，不依赖 useCallback 闭包
+  const formRef = useRef(form);
+  formRef.current = form;
+
+  const handleSave = async () => {
+    const f = formRef.current;
+
+    // 校验
+    if (!f.title.trim()) { setValidation({ title: "请输入标题" }); return; }
+    if (!f.contentMd.trim()) { setValidation({ content: "请输入正文内容" }); return; }
     setValidation({});
-    if (!canSave || !form.content) return;
     setSaving(true);
     setError(null);
 
-    // Convert blob URL cover image to data URL before saving
-    let coverSrc = form.coverImage;
-    if (coverSrc && coverSrc.startsWith("blob:")) {
-      try {
-        const blob = await fetch(coverSrc).then((r) => r.blob());
-        coverSrc = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-      } catch {
-        // Keep the blob URL as fallback
+    try {
+      // 封面图：blob URL → data URL
+      let coverSrc = f.coverImage;
+      if (coverSrc && coverSrc.startsWith("blob:")) {
+        try {
+          const blob = await fetch(coverSrc).then((r) => r.blob());
+          coverSrc = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch { /* keep blob URL */ }
       }
-    }
 
-    let finalContent = form.content;
-    if (coverSrc) {
-      finalContent = {
-        ...form.content,
-        content: [
-          { type: "paragraph", content: [{ type: "image", attrs: { src: coverSrc, alt: "cover" } }] },
-          ...((form.content as any).content || []),
-        ],
-      };
-    }
-
-    const result = await createEntry({
-      title: form.title.trim(),
-      type: form.type,
-      content: JSON.stringify(finalContent),
-      contentMd: form.contentMd,
-      tags: form.tags,
-    });
-
-    if (result.success) {
-      // Remove this draft
-      if (currentDraftId) {
-        setDrafts((prev) => {
-          const updated = prev.filter((d) => d.id !== currentDraftId);
-          saveDrafts(updated);
-          return updated;
-        });
+      // 获取/生成 TipTap JSON
+      let finalContent = f.content;
+      if (!finalContent) {
+        const { marked } = await import("marked");
+        const html = marked.parse(f.contentMd) as string;
+        const { generateJSON } = await import("@tiptap/core");
+        const StarterKit = await import("@tiptap/starter-kit");
+        finalContent = generateJSON(
+          html,
+          [StarterKit.default.configure({ heading: { levels: [1, 2, 3, 4, 5] } })],
+        ) as Record<string, unknown>;
       }
-      router.push(`/entry/${result.data.slug}`);
-    } else {
-      setError(result.error);
+      if (coverSrc) {
+        finalContent = {
+          ...finalContent,
+          content: [
+            { type: "paragraph", content: [{ type: "image", attrs: { src: coverSrc, alt: "cover" } }] },
+            ...((finalContent as any).content || []),
+          ],
+        };
+      }
+
+      const result = await createEntry({
+        title: f.title.trim(),
+        type: f.type,
+        content: JSON.stringify(finalContent),
+        contentMd: f.contentMd,
+        tags: f.tags,
+      });
+
+      if (result.success) {
+        if (currentDraftId) {
+          setDrafts((prev) => {
+            const updated = prev.filter((d) => d.id !== currentDraftId);
+            saveDrafts(updated);
+            return updated;
+          });
+          // 清理服务端草稿
+          deleteDraftFromServer(currentDraftId.replace("draft-", "")).catch(() => {});
+        }
+        router.push(`/entry/${result.data.slug}`);
+      } else {
+        setError(result.error || "保存失败");
+        setSaving(false);
+      }
+    } catch (e) {
+      console.error("handleSave error:", e);
+      setError("保存出错，请重试");
       setSaving(false);
     }
-  }, [form, canSave, router, currentDraftId]);
+  };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        handleSave();
-      }
-    },
-    [handleSave]
-  );
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      handleSave();
+    }
+  };
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]" onKeyDown={handleKeyDown}>
@@ -467,6 +498,15 @@ function PlantPageInner() {
                     if (!currentDraftId) setCurrentDraftId(draftId);
                     return updated;
                   });
+                  // 同步到服务器
+                  saveDraftToServer(draftId.replace("draft-", ""), {
+                    title: form.title,
+                    type: form.type,
+                    tags: form.tags,
+                    content: form.content ? JSON.stringify(form.content) : "",
+                    contentMd: form.contentMd,
+                    coverImage: form.coverImage,
+                  }).catch(() => {});
                   toast.success("暂存成功");
                 }}
                 className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground hover:bg-card-hover hover:text-foreground interactive"
@@ -475,12 +515,8 @@ function PlantPageInner() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={!canSave || saving}
-                className={`inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-sm font-medium interactive ${
-                  canSave && !saving
-                    ? "bg-primary text-white hover:bg-primary-hover"
-                    : "bg-primary text-white opacity-50 cursor-not-allowed"
-                }`}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-sm font-medium interactive bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? "上传中…" : "📤 上传"}
               </button>

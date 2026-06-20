@@ -78,3 +78,51 @@ export async function getUsersByIds(ids: string[]): Promise<UserInfo[]> {
     avatar: u.avatar || getDefaultAvatar(u.username),
   }));
 }
+
+// ============================================================
+// Device Identification — for per-device session management
+// ============================================================
+
+/** Parse OS platform from User-Agent string */
+export function parseOS(userAgent: string): string {
+  const ua = userAgent || "";
+  // iPad must be checked before Mac — modern iPadOS sends desktop-class UA
+  if (/ipad/i.test(ua)) return "iPadOS";
+  if (/iphone|ipod/i.test(ua)) return "iOS";
+  if (/android/i.test(ua)) return "Android";
+  if (/windows/i.test(ua)) return "Windows";
+  if (/macintosh/i.test(ua) || /mac/i.test(ua)) return "Mac";
+  if (/linux/i.test(ua)) return "Linux";
+  return "Unknown";
+}
+
+/** Extract client IP from request headers */
+export function extractIP(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  const realIP = request.headers.get("x-real-ip");
+  if (realIP) return realIP.trim();
+  return "127.0.0.1";
+}
+
+/** Parse browser name from User-Agent for display purposes */
+export function parseBrowser(userAgent: string): string {
+  const ua = userAgent || "";
+  if (/edg/i.test(ua)) return "Edge";
+  if (/chrome/i.test(ua) && !/edg/i.test(ua)) return "Chrome";
+  if (/firefox/i.test(ua)) return "Firefox";
+  if (/safari/i.test(ua) && !/chrome/i.test(ua)) return "Safari";
+  return "Browser";
+}
+
+/** Simple hash function for device key (doesn't need crypto strength) */
+export function hashDeviceKey(ip: string, os: string): string {
+  const input = `${ip}|${os}`;
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return `dk_${Math.abs(hash).toString(36)}`;
+}

@@ -140,6 +140,8 @@ export default async function RootLayout({
             if (msg && msg.indexOf('#418') !== -1) return true;
             // Waifu library — non-critical race during model re-init
             if (msg && msg.indexOf('innerHTML') !== -1) return true;
+            // Tampermonkey/Greasemonkey userscripts on user's device — not our code
+            if (msg && msg.indexOf('GM_getValue') !== -1) return true;
             var el = document.createElement('div');
             el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#c22;color:#fff;padding:12px;font:12px monospace;max-height:40vh;overflow:auto;';
             el.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';

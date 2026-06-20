@@ -45,12 +45,44 @@ export default function DraftsPage() {
 
   useEffect(() => {
     setDrafts(loadDrafts());
+    // 加载服务端草稿并合并（跨设备同步，仅登录用户）
+    import("@/actions/entry-actions").then(({ loadDraftsFromServer }) => {
+      loadDraftsFromServer().then((serverDrafts) => {
+        if (serverDrafts.length === 0) return;
+        setDrafts((prev) => {
+          const existing = new Set(prev.map((d) => d.id));
+          const merged = [...prev];
+          for (const sd of serverDrafts) {
+            const id = sd.slug.replace("draft-", "");
+            if (!existing.has(id)) {
+              merged.push({
+                id,
+                name: sd.title,
+                createdAt: new Date(sd.updatedAt).getTime(),
+                form: {
+                  title: sd.title, type: sd.type, tags: sd.tags,
+                  content: (() => { try { return JSON.parse(sd.content); } catch { return null; } })(),
+                  contentMd: sd.contentMd, coverImage: sd.coverImage,
+                },
+              });
+            }
+          }
+          // 持久化到 localStorage，确保 /plant?draft=<id> 能找到
+          saveDrafts(merged);
+          return merged;
+        });
+      }).catch(() => {});
+    });
   }, []);
 
   const handleDelete = (id: string) => {
     const updated = drafts.filter((d) => d.id !== id);
     setDrafts(updated);
     saveDrafts(updated);
+    // 同步删除服务端草稿
+    import("@/actions/entry-actions").then(({ deleteDraftFromServer }) => {
+      deleteDraftFromServer(id).catch(() => {});
+    });
   };
 
   const handleLoad = (draft: Draft) => {

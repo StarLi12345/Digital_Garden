@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE, SESSION_DURATION, UserInfo, getDefaultAvatar } from "@/lib/auth";
+import { createSession, sessionCookieOpts } from "@/lib/session";
 
 const PUBLIC_ACCOUNT_ID = "default-user";
 const RECENT_DAYS = 30;
@@ -46,6 +48,9 @@ export async function POST(request: Request) {
     avatar: user.avatar || getDefaultAvatar(user.username),
   };
 
+  // Create device session (kicks out old session on same device)
+  const sessionToken = await createSession(user.id, request).catch(() => null);
+
   const response = NextResponse.json({ success: true, user: userInfo });
   const isSecure = request.url.startsWith("https://");
   const cookieOpts = {
@@ -58,8 +63,16 @@ export async function POST(request: Request) {
   response.cookies.set(SESSION_COOKIE, user.id, cookieOpts);
   response.cookies.set("garden-user-id", user.id, { ...cookieOpts, httpOnly: false });
 
-  // Set auth cookie for all accounts — even public ones need write access for their owner
-  response.cookies.set("garden-auth", "verified", { ...cookieOpts, httpOnly: false });
+  // 公共账号不给 garden-auth，访客切换后仍是访客（只读+无草稿同步）
+  const cookieStore = await cookies();
+  const hasExistingAuth = cookieStore.get("garden-auth")?.value === "verified";
+  if (body.userId !== PUBLIC_ACCOUNT_ID || hasExistingAuth) {
+    response.cookies.set("garden-auth", "verified", { ...cookieOpts, httpOnly: false });
+  }
+  // Session token for device-based write validation
+  if (sessionToken) {
+    response.cookies.set("garden-session-id", sessionToken, sessionCookieOpts(request));
+  }
 
   return response;
 }

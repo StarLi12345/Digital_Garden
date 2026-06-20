@@ -27,6 +27,7 @@ export async function POST() {
   response.cookies.set(SESSION_COOKIE, "", cookieOpts);
   response.cookies.set("garden-user-id", "", { ...cookieOpts, httpOnly: false });
   response.cookies.set("garden-auth", "", { ...cookieOpts, httpOnly: false });
+  response.cookies.set("garden-session-id", "", { ...cookieOpts, httpOnly: false });
 
   return response;
 }

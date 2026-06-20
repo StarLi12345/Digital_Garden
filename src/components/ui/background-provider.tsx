@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { resolveBackgroundUrl } from "@/lib/backgrounds";
 import { GardenBackground } from "@/components/ui/garden-background";
+import { loadBackgroundImage } from "@/lib/file-storage";
 
 interface BgState {
   src: string | null;
@@ -99,7 +100,7 @@ export function BackgroundProvider() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Seed defaults + sync from localStorage
+  // Seed defaults + sync from localStorage (+ IndexedDB fallback)
   useEffect(() => {
     if (!localStorage.getItem("garden-theme")) {
       localStorage.setItem("garden-theme", "garden");
@@ -112,16 +113,39 @@ export function BackgroundProvider() {
         localStorage.setItem("garden-bg-opacity", "25");
       }
     }
-    const update = () => setBg(getStored());
-    update();
+
+    const syncFromStorage = () => {
+      const state = getStored();
+      // If no background in localStorage but IndexedDB has one, load it async
+      const stored = localStorage.getItem("garden-background") || "";
+      const bgMarker = localStorage.getItem("garden-bg-image") || "";
+      if ((!stored || stored.startsWith("blob:")) && bgMarker === "idb:bg") {
+        loadBackgroundImage().then((dataUrl) => {
+          if (dataUrl) {
+            // Restore to localStorage so future syncs pick it up
+            try { localStorage.setItem("garden-background", dataUrl); } catch {}
+            setBg((prev) => ({ ...prev, src: dataUrl, isVideo: isVideoSrc(dataUrl) }));
+            return;
+          }
+          // IndexedDB load failed — use default
+          setBg(state);
+        });
+        // Show default while loading
+        setBg(state);
+        return;
+      }
+      setBg(state);
+    };
+
+    syncFromStorage();
     setMounted(true);
-    window.addEventListener("storage", update);
-    window.addEventListener("garden-bg-changed", update);
-    window.addEventListener("garden-theme-changed", update);
+    window.addEventListener("storage", syncFromStorage);
+    window.addEventListener("garden-bg-changed", syncFromStorage);
+    window.addEventListener("garden-theme-changed", syncFromStorage);
     return () => {
-      window.removeEventListener("storage", update);
-      window.removeEventListener("garden-bg-changed", update);
-      window.removeEventListener("garden-theme-changed", update);
+      window.removeEventListener("storage", syncFromStorage);
+      window.removeEventListener("garden-bg-changed", syncFromStorage);
+      window.removeEventListener("garden-theme-changed", syncFromStorage);
     };
   }, []);
 
