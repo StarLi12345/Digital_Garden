@@ -1,9 +1,9 @@
 // Digital Garden — Prisma Schema
-// Version: 3.0-cloud
-// Database: PostgreSQL (production/cloud) | SQLite (local dev fallback)
+// Version: 4.0
+// Database: SQLite (local + production)
 //
-// Cloud Migration (Phase 1): provider changed from sqlite → postgresql
-// Local SQLite fallback: change provider back to "sqlite" for local dev
+// Future: migrate to PostgreSQL when traffic warrants it.
+// Migration file exists at prisma/migrations/ for reference.
 //
 // Design authority: MVP_v0.1.md §5.1
 // Architecture reference: ARCHITECTURE.md §5
@@ -13,7 +13,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -26,11 +26,35 @@ model User {
   passwordHash String
   displayName  String   @default("")
   avatar       String?  // URL or data URL for avatar image
+  visibility   String   @default("public")  // "public" | "private"
   lastLoginAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   entries      Entry[]
+  sessions     Session[]
+}
+
+// ─────────────────────────────────────────────
+// Session — 设备级别会话管理
+// ─────────────────────────────────────────────
+// 同一用户可在不同设备（手机/电脑/平板）同时登录，
+// 但同一设备（同 deviceKey）只能有一个活跃 session。
+// 新登录自动踢掉同设备的旧 session。
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  deviceKey  String   // sha256(IP + "|" + OS)
+  token      String   @unique
+  deviceName String?  // "Windows Chrome" 等人性化名称
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceKey])  // 一人一设备最多一个活跃 session
+  @@index([token])
 }
 
 // ─────────────────────────────────────────────
@@ -102,6 +126,22 @@ model EntryTag {
   tagId   String
 
   @@id([entryId, tagId])
+}
+
+// ─────────────────────────────────────────────
+// PageView — 页面访问统计
+// ─────────────────────────────────────────────
+model PageView {
+  id        String   @id @default(cuid())
+  path      String                    // e.g. "/" or "/entry/some-slug"
+  entrySlug String?                   // null for non-entry pages
+  ip        String                    // anonymized (last octet zeroed)
+  userAgent String   @default("")     // for bot filtering
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entrySlug])
+  @@index([path])
 }
 
 // ─────────────────────────────────────────────

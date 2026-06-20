@@ -61,7 +61,7 @@ function storedNum(key: string, fallback: number): number {
   try { const v = localStorage.getItem(key); return v ? Number(v) : fallback; } catch { return fallback; }
 }
 function storedBool(key: string, fallback: boolean): boolean {
-  try { return localStorage.getItem(key) === "true"; } catch { return fallback; }
+  try { const v = localStorage.getItem(key); return v === null ? fallback : v === "true"; } catch { return fallback; }
 }
 function storedLoop(): LoopMode {
   try {

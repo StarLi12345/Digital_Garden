@@ -9,15 +9,15 @@ import { BACKGROUND_CATEGORIES, getStoredBackground, setStoredBackground } from 
 import { THEMES, getStoredTheme, setStoredTheme, applyThemeBindings, getThemeById } from "@/lib/themes";
 import { getTopbarMode, setTopbarMode, type TopbarMode } from "@/lib/layout-config";
 import { getAmbientEffect, setAmbientEffect, getCursorEffect, setCursorEffect, type AmbientEffect, type CursorEffect } from "@/lib/ambient-config";
-import { getTimeEnabled, setTimeEnabled, getWeatherMode, setWeatherMode, getMockWeather, setMockWeather, type WeatherType } from "@/lib/theme-runtime";
-import { getPrefs, setPrefs, applyPrefs, resetPrefs, DEFAULT_PREFS, FONT_FAMILIES, FONT_SIZES, LINE_HEIGHTS, SPACINGS, THEME_COLOR_PRESETS, DEFAULT_MODULE_ORDER, type UIPreferences, type ModuleVisibility } from "@/lib/ui-preferences";
+// (theme runtime removed)
+import { getPrefs, getMobilePrefs, setPrefs, applyPrefs, resetPrefs, DEFAULT_PREFS, FONT_FAMILIES, FONT_SIZES, LINE_HEIGHTS, SPACINGS, THEME_COLOR_PRESETS, DEFAULT_MODULE_ORDER, type UIPreferences, type ModuleVisibility } from "@/lib/ui-preferences";
 import { LIVE2D_PRESETS, getLive2DConfig, setLive2DConfig, type Live2DConfig } from "@/lib/live2d-config";
 import { fetchModelManifest, type ModelManifestEntry } from "@/lib/model-registry";
 // TTS imports removed — feature paused (2026-06-13)
 // Re-add when re-enabled: TTS_VOICE_PRESETS, getStoredVoice, setStoredVoice, getFishAudioConfig, setFishAudioConfig, type TTSVoice
 import GardenSlider from "@/components/ui/garden-slider";
 import { Switch } from "@/components/ui/garden-widgets";
-import { persistFile, loadPersistedFile, storeBannerImage, removeBannerImage, loadBannerImage } from "@/lib/file-storage";
+import { persistFile, loadPersistedFile, storeBannerImage, removeBannerImage, loadBannerImage, storeBackgroundImage, loadBackgroundImage, removeBackgroundImage } from "@/lib/file-storage";
 import { Live2DPreview } from "@/components/ui/live2d-preview";
 
 // ── Helpers ──────────────────────────────────────────
@@ -31,6 +31,11 @@ const MODE_OPTIONS = [
 function getStoredNum(key: string, fallback: number): number {
   if (typeof window === "undefined") return fallback;
   try { const v = localStorage.getItem(key); return v ? Number(v) : fallback; } catch { return fallback; }
+}
+
+function getStoredStr(key: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
 }
 
 function readFileAsDataURL(file: File): Promise<string> {
@@ -275,8 +280,9 @@ function BackgroundInline() {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const msgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { setSelected(getStoredBackground() || ""); }, []);
+  useEffect(() => { setSelected(getStoredBackground() || ""); return () => { if (msgTimerRef.current != null) clearTimeout(msgTimerRef.current); }; }, []);
 
   const applyBg = (path: string) => {
     setSelected(path); setStoredBackground(path);
@@ -287,17 +293,27 @@ function BackgroundInline() {
     if (!isValidImageOrVideo(file)) { setUploadMsg("❌ 格式不支持"); return; }
     setUploading(true); setUploadMsg("⏳...");
     try {
-      // Immediate display via blob URL
-      const blobUrl = createFileURL(file); applyBg(blobUrl);
-      // Persist via IndexedDB (handles large files)
+      // Read as data URL for immediate display + persistence
+      const dataUrl = await readFileAsDataURL(file);
+      // Apply immediately (data URLs work in CSS background-image)
+      applyBg(dataUrl);
+      // Persist in IndexedDB (same pattern as banner — reliable for large files)
       try {
-        const key = await persistFile("bg", file);
-        const url = await loadPersistedFile(key);
-        if (url) { applyBg(url); setStoredBackground(url); setUploadMsg("✓"); }
-        else { setUploadMsg("✓"); }
+        await storeBackgroundImage(dataUrl);
+        setUploadMsg("✓");
       } catch { setUploadMsg("✓"); }
-    } catch { setUploadMsg("❌ 失败"); }
-    finally { setUploading(false); setTimeout(() => setUploadMsg(""), 2500); }
+    } catch (e: any) {
+      // Fallback: try blob URL for display only (won't persist across reload)
+      if (e?.message?.includes("过大")) {
+        const blobUrl = createFileURL(file);
+        applyBg(blobUrl);
+        try { await storeBackgroundImage(blobUrl); } catch {}
+        setUploadMsg("⚠️ 仅本次有效");
+      } else {
+        setUploadMsg("❌ 失败");
+      }
+    }
+    finally { setUploading(false); if (msgTimerRef.current != null) clearTimeout(msgTimerRef.current); msgTimerRef.current = setTimeout(() => setUploadMsg(""), 2500); }
   };
 
   return (
@@ -323,7 +339,7 @@ function BackgroundInline() {
       {uploadMsg && <p className={`text-[0.625rem] ${uploadMsg.startsWith("❌") ? "text-accent" : "text-primary"}`}>{uploadMsg}</p>}
 
       {/* Presets */}
-      <div className="grid gap-1.5 grid-cols-4">
+      <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-4">
         {BACKGROUND_CATEGORIES.flatMap(c => c.backgrounds).slice(0, 8).map(bg => (
           <button key={bg.path} onClick={() => applyBg(selected === bg.path ? "" : bg.path)}
             className={`relative rounded border-2 overflow-hidden aspect-video interactive ${selected === bg.path ? "border-primary ring-1 ring-primary/30" : "border-border hover:border-secondary"}`} title={bg.label}>
@@ -334,7 +350,7 @@ function BackgroundInline() {
 
       {/* Opacity + blur */}
       <SliderPair />{/* defined below to use live state */}
-      {selected && <button onClick={() => applyBg("")} className="text-[0.625rem] text-muted-foreground hover:text-foreground interactive">✕ 清除背景</button>}
+      {selected && <button onClick={() => { applyBg(""); removeBackgroundImage().catch(() => {}); }} className="text-[0.625rem] text-muted-foreground hover:text-foreground interactive">✕ 清除背景</button>}
     </div>
   );
 }
@@ -342,7 +358,7 @@ function BackgroundInline() {
 function SliderPair() {
   const [opacity, setOpacity] = useState(() => getStoredNum("garden-bg-opacity", 55));
   const [blur, setBlur] = useState(() => getStoredNum("garden-bg-blur", 0));
-  const [maskColor, setMaskColor] = useState(() => localStorage.getItem("garden-bg-mask") || "transparent");
+  const [maskColor, setMaskColor] = useState(() => getStoredStr("garden-bg-mask", "transparent"));
   const [maskOpacity, setMaskOpacity] = useState(() => getStoredNum("garden-bg-mask-opacity", 30));
 
   const setOp = (v: number) => { setOpacity(v); localStorage.setItem("garden-bg-opacity", String(v)); window.dispatchEvent(new Event("garden-bg-changed")); };
@@ -397,7 +413,7 @@ function SliderPair() {
 function BannerSliderPair() {
   const [opacity, setOpacity] = useState(() => getStoredNum("garden-banner-opacity", 100));
   const [blur, setBlur] = useState(() => getStoredNum("garden-banner-blur", 0));
-  const [maskColor, setMaskColor] = useState(() => localStorage.getItem("garden-banner-mask") || "transparent");
+  const [maskColor, setMaskColor] = useState(() => getStoredStr("garden-banner-mask", "transparent"));
   const [maskOpacity, setMaskOpacity] = useState(() => getStoredNum("garden-banner-mask-opacity", 0));
 
   const setOp = (v: number) => {
@@ -690,7 +706,7 @@ function ColorPickersInline() {
   const [pendingText, setPendingText] = useState("#3d3929");
   const [useCustom, setUseCustom] = useState(false);
   useEffect(() => {
-    const prefs = getPrefs();
+    const prefs = getMobilePrefs();
     setP(prefs);
     setPendingColor(prefs.themeColor);
     setUseCustom(prefs.useCustomTextColor);
@@ -830,10 +846,13 @@ function ColorPickersInline() {
 function DynamicSection() {
   const [ambient, setAmbient] = useState<AmbientEffect>("none");
   const [cursor, setCursor] = useState<CursorEffect>("none");
-  const [timeOn, setTimeOn] = useState(false);
-  const [weatherMode, setWMode] = useState<"off"|"mock">("off");
-  const [mockW, setMockW] = useState<WeatherType>("sunny");
-  useEffect(() => { setAmbient(getAmbientEffect()); setCursor(getCursorEffect()); setTimeOn(getTimeEnabled()); setWMode(getWeatherMode()); setMockW(getMockWeather()); }, []);
+  useEffect(() => {
+    const sync = () => { setAmbient(getAmbientEffect()); setCursor(getCursorEffect()); };
+    sync();
+    // Listen for theme changes → re-sync ambient effect button state
+    window.addEventListener("garden-theme-changed", sync);
+    return () => window.removeEventListener("garden-theme-changed", sync);
+  }, []);
   const pickA = (e: AmbientEffect) => { setAmbient(e); setAmbientEffect(e); window.dispatchEvent(new Event("storage")); };
   const pickC = (e: CursorEffect) => { setCursor(e); setCursorEffect(e); window.dispatchEvent(new Event("storage")); };
 
@@ -842,8 +861,8 @@ function DynamicSection() {
       <div>
         <p className="text-xs text-muted-foreground mb-1.5">环境动效</p>
         <div className="flex flex-wrap gap-1.5">
-          {(["none","petal","dust","snow","rain","geometry"] as AmbientEffect[]).map(v => {
-            const labels: Record<string,string> = { none:"❌ 无", petal:"🌸 花瓣", dust:"✨ 光尘", snow:"❄️ 飘雪", rain:"🌧 落雨", geometry:"🔷 几何" };
+          {(["none","petal","dust","snow","rain"] as AmbientEffect[]).map(v => {
+            const labels: Record<string,string> = { none:"❌ 无", petal:"🌸 樱飘", dust:"✨ 光尘", snow:"❄️ 飘雪", rain:"🌧 落雨" };
             return <button key={v} onClick={() => pickA(v)} className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${ambient===v?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{labels[v]}</button>;
           })}
         </div>
@@ -855,27 +874,6 @@ function DynamicSection() {
             const labels: Record<string,string> = { none:"❌ 无", petal:"🌸 花瓣", dust:"✨ 光尘", snow:"❄️ 雪" };
             return <button key={v} onClick={() => pickC(v)} className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${cursor===v?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{labels[v]}</button>;
           })}
-        </div>
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground mb-1.5">时间 & 天气</p>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { const n = !timeOn; setTimeOn(n); setTimeEnabled(n); }}
-            className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${timeOn?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>🕐 时间 {timeOn?"开":"关"}</button>
-          <button onClick={() => { const n: "off"|"mock" = weatherMode==="off"?"mock":"off"; setWMode(n); setWeatherMode(n); }}
-            className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${weatherMode==="mock"?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>🌤 天气 {weatherMode==="mock"?"开":"关"}</button>
-        </div>
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground mb-1.5">🌿 花园生态模式</p>
-        <div className="flex items-center gap-2">
-          <EcoToggle />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground mb-1.5">🌸 樱花飘落 (Canvas)</p>
-        <div className="flex items-center gap-2">
-          <SakuraToggle />
         </div>
       </div>
       <div>
@@ -899,7 +897,12 @@ function DynamicSection() {
 function WidgetToggle({ id, label }: { id: string; label: string }) {
   const [on, setOn] = useState(false);
   useEffect(() => {
-    try { setOn(localStorage.getItem(id) === "true"); } catch {}
+    const sync = () => {
+      try { setOn(localStorage.getItem(id) === "true"); } catch {}
+    };
+    sync();
+    window.addEventListener("garden-prefs", sync);
+    return () => window.removeEventListener("garden-prefs", sync);
   }, [id]);
   const toggle = () => {
     const n = !on;
@@ -915,80 +918,37 @@ function WidgetToggle({ id, label }: { id: string; label: string }) {
   );
 }
 
+const DEFAULT_OWM_KEY = "0a81956b3315eb718b0cf79850b56296";
+
 function WeatherKeyInput() {
   const [key, setKey] = useState("");
-  const [show, setShow] = useState(false);
+  const [saved, setSaved] = useState(false);
   useEffect(() => {
     try { setKey(localStorage.getItem("garden-owm-key") || ""); } catch {}
   }, []);
   const save = () => {
-    try { localStorage.setItem("garden-owm-key", key.trim()); } catch {}
+    try { localStorage.setItem("garden-owm-key", key.trim() || DEFAULT_OWM_KEY); } catch {}
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
     window.dispatchEvent(new CustomEvent("garden-prefs"));
   };
   return (
     <div className="mt-2">
-      <button onClick={() => setShow(!show)}
-        className="text-[0.625rem] text-muted-foreground hover:text-foreground interactive">
-        🔑 OpenWeather API {show ? "▲" : "▼"}
-      </button>
-      {show && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <input
-            type="text"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder="输入 API Key…"
-            className="flex-1 rounded-md border border-border bg-card px-2 py-1 text-[0.688rem] text-foreground outline-none focus:border-primary"
-          />
-          <button onClick={save}
-            className="rounded-md bg-primary px-2 py-1 text-[0.688rem] text-white hover:bg-primary-hover interactive">
-            保存
-          </button>
-        </div>
-      )}
+      <p className="text-[0.625rem] text-muted-foreground mb-1">🔑 OpenWeather API</p>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="text"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder={DEFAULT_OWM_KEY ? "已内置默认 Key" : "输入 API Key…"}
+          className="flex-1 rounded-md border border-border bg-card px-2 py-1 text-[0.688rem] text-foreground outline-none focus:border-primary"
+        />
+        <button onClick={save}
+          className={`rounded-md px-2 py-1 text-[0.688rem] interactive transition-colors ${saved ? "bg-emerald-500 text-white" : "bg-primary text-white hover:bg-primary-hover"}`}>
+          {saved ? "✓ 已保存" : "保存"}
+        </button>
+      </div>
     </div>
-  );
-}
-
-function EcoToggle() {
-  const [mode, setMode] = useState("standard");
-  useEffect(() => {
-    try { setMode(localStorage.getItem("garden-eco-mode") || "standard"); } catch {}
-  }, []);
-  const cycle = () => {
-    const modes = ["off", "standard", "enhanced"];
-    const idx = modes.indexOf(mode);
-    const next = modes[(idx + 1) % modes.length];
-    setMode(next);
-    try { localStorage.setItem("garden-eco-mode", next); } catch {}
-    // Notify ecosystem engine
-    try { const { getEcosystem } = require("@/ecosystem/garden-ecosystem"); getEcosystem().setMode(next as any); } catch {}
-  };
-  const labels: Record<string, string> = { off: "关闭", standard: "标准", enhanced: "增强" };
-  return (
-    <button onClick={cycle}
-      className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${mode !== "off" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>
-      🌿 生态 {labels[mode]}
-    </button>
-  );
-}
-
-function SakuraToggle() {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    try { setOn(localStorage.getItem("garden-sakura") === "true"); } catch {}
-  }, []);
-  const toggle = () => {
-    const n = !on;
-    setOn(n);
-    try { localStorage.setItem("garden-sakura", String(n)); } catch {}
-    window.dispatchEvent(new CustomEvent("garden-prefs"));
-  };
-  return (
-    <button onClick={toggle}
-      className={`rounded-full px-2.5 py-1 text-[0.688rem] interactive ${on?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>
-      🌸 樱飘 {on?"开":"关"}
-    </button>
   );
 }
 
@@ -1015,17 +975,17 @@ function CrtToggle() {
 
 function TypographySection() {
   const [p, setP] = useState(DEFAULT_PREFS);
-  useEffect(() => { setP(getPrefs()); }, []);
+  useEffect(() => { setP(getMobilePrefs()); }, []);
   const update = (partial: Partial<UIPreferences>) => { setPrefs(partial); setP(prev => ({ ...prev, ...partial })); applyPrefs({ ...p, ...partial }); };
   const reset = () => { resetPrefs(); setP({ ...DEFAULT_PREFS, moduleOrder: [...DEFAULT_MODULE_ORDER] }); applyPrefs(DEFAULT_PREFS); };
 
   return (
     <div className="space-y-4">
-      <button onClick={reset} className="text-[0.625rem] text-muted-foreground hover:text-foreground interactive">重置默认</button>
+      <button onClick={reset} className="garden-ctrl-btn-muted interactive">重置默认</button>
 
       <div>
         <p className="text-xs text-muted-foreground mb-1.5">字体</p>
-        <div className="grid gap-1.5 grid-cols-4">
+        <div className="grid gap-1.5 grid-cols-2 sm:grid-cols-4">
           {FONT_FAMILIES.map(({ v, label, icon, preview }) => (
             <button key={v} onClick={() => update({ fontFamily: v })}
               className={`rounded border p-2 text-center interactive ${p.fontFamily===v?"border-primary bg-primary/5":"border-border bg-card hover:bg-card-hover"}`}>
@@ -1098,11 +1058,15 @@ function MusicSection() {
   const [dragOver, setDragOver] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const msgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const LOOP_LABELS: Record<string, string> = { one: "单曲循环", all: "列表循环", shuffle: "随机播放" };
   const LOOP_MODES: LoopMode[] = ["one", "all", "shuffle"];
 
-  useEffect(() => { setCustomTracks(getAllTracks().filter(t => !t.id.match(/^\d+$/))); }, [enabled]);
+  useEffect(() => {
+    setCustomTracks(getAllTracks().filter(t => !t.id.match(/^\d+$/)));
+    return () => { if (msgTimerRef.current != null) clearTimeout(msgTimerRef.current); };
+  }, [enabled]);
 
   const handleFile = async (file: File) => {
     if (!isValidAudio(file)) { setUploadMsg("❌ 格式不支持"); return; }
@@ -1120,7 +1084,7 @@ function MusicSection() {
       } catch {}
       setUploadMsg("✓");
     } catch { setUploadMsg("❌ 失败"); }
-    setTimeout(() => setUploadMsg(""), 2500);
+    if (msgTimerRef.current != null) clearTimeout(msgTimerRef.current); msgTimerRef.current = setTimeout(() => setUploadMsg(""), 2500);
   };
 
   const allTracks = getAllTracks();
@@ -1169,7 +1133,7 @@ function MusicSection() {
             {allTracks.map(t => (
               <div key={t.id} className="flex items-center gap-1">
                 <button onClick={() => setTrack(t.id)} className={`flex-1 rounded px-1.5 py-1 text-[0.688rem] text-left truncate interactive ${trackId===t.id?"bg-primary/10 text-primary font-medium":"text-muted-foreground hover:bg-muted"}`}>{t.title}</button>
-                {!t.id.match(/^\d+/) && <button onClick={() => { removeCustomTrack(t.id); setCustomTracks(prev => prev.filter(ct => ct.id!==t.id)); if (trackId===t.id) setTrack(allTracks[0]?.id||"01"); }} className="text-[0.625rem] text-muted-foreground hover:text-accent interactive">✕</button>}
+                {!t.id.match(/^\d+/) && <button onClick={() => { removeCustomTrack(t.id); setCustomTracks(prev => prev.filter(ct => ct.id!==t.id)); if (trackId===t.id) setTrack(allTracks[0]?.id||"01"); }} className="garden-ctrl-btn-muted interactive">✕</button>}
               </div>
             ))}
           </div>
@@ -1190,9 +1154,39 @@ function MusicSection() {
 
 // ── Companion Section (Live2D + Voice + API) ──────────
 
+const LIVE2D_ENABLED_KEY = "garden-live2d-enabled";
+
 function CompanionSection() {
+  const [live2dOn, setLive2dOn] = useState(true);
+
+  useEffect(() => {
+    try {
+      setLive2dOn(localStorage.getItem(LIVE2D_ENABLED_KEY) !== "false");
+    } catch {}
+  }, []);
+
+  const toggleLive2D = () => {
+    const next = !live2dOn;
+    setLive2dOn(next);
+    localStorage.setItem(LIVE2D_ENABLED_KEY, String(next));
+    window.dispatchEvent(new Event("live2d-toggle"));
+  };
+
   return (
     <div className="space-y-5">
+      {/* ── Live2D toggle ── */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">🌸 Live2D 看板娘</span>
+        <button
+          onClick={toggleLive2D}
+          className={`rounded-full px-3 py-1 text-xs interactive ${
+            live2dOn ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {live2dOn ? "已开启" : "已关闭"}
+        </button>
+      </div>
+
       {/* ── Live2D: model list + preview (side by side) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Live2DModelMini />
@@ -1362,17 +1356,17 @@ function VoiceMini() {
 }
 
 function ApiMini() {
-  const [url, setUrl] = useState(""); const [key, setKey] = useState(""); const [model, setModel] = useState("deepseek-v4-flash");
+  const [url, setUrl] = useState(""); const [key, setKey] = useState(""); const [model, setModel] = useState("");
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     setUrl(localStorage.getItem("garden-companion-api")||"");
     setKey(localStorage.getItem("garden-companion-key")||"");
-    setModel(localStorage.getItem("garden-companion-model")||"deepseek-v4-flash");
+    setModel(localStorage.getItem("garden-companion-model")||"");
   }, []);
   const save = () => {
     localStorage.setItem("garden-companion-api", url.trim());
     localStorage.setItem("garden-companion-key", key.trim());
-    localStorage.setItem("garden-companion-model", model.trim()||"deepseek-v4-flash");
+    localStorage.setItem("garden-companion-model", model.trim());
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
 
@@ -1395,7 +1389,7 @@ function ApiMini() {
         body: JSON.stringify({
           apiKey: key.trim(),
           endpoint: url.trim() || "https://api.deepseek.com/v1/chat/completions",
-          model: model.trim() || "deepseek-v4-flash",
+          model: model.trim() || "",
         }),
       });
       const data = await res.json();

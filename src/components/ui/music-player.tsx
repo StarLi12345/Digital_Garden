@@ -54,7 +54,10 @@ export function MusicPlayer() {
   } = useAudio();
 
   const [collapsed, setCollapsed] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
+  const prevCollapsedRef = useRef(true); // retain state across dismiss/restore
   const [showList, setShowList] = useState(false);
+  const collapseBtnRef = useRef<HTMLButtonElement>(null);
 
   // ── Progress ───────────────────────────────────────────
   const [currentTime, setCurrentTime] = useState(0);
@@ -62,27 +65,34 @@ export function MusicPlayer() {
   const progressRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Track the global audio element
+  // Track the global audio element + sync progress via timeupdate
   useEffect(() => {
+    let audio: HTMLAudioElement | null = null;
+    let onTime: (() => void) | null = null;
+    let attempts = 0;
+    const maxAttempts = 50; // 10 seconds max
+
     const timer = setInterval(() => {
       const a = document.querySelector("audio[data-garden-audio]") as HTMLAudioElement | null;
       if (a) {
+        // Found — set initial values
+        audio = a;
         audioRef.current = a;
         setCurrentTime(a.currentTime);
         setDuration(a.duration || 0);
+        // Attach timeupdate listener for real-time updates
+        onTime = () => { setCurrentTime(a.currentTime); setDuration(a.duration || 0); };
+        a.addEventListener("timeupdate", onTime);
+        clearInterval(timer);
+      } else if (++attempts >= maxAttempts) {
         clearInterval(timer);
       }
     }, 200);
-    return () => clearInterval(timer);
-  }, [enabled, trackId]);
 
-  // Sync progress via timeupdate
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    const onTime = () => { setCurrentTime(a.currentTime); setDuration(a.duration || 0); };
-    a.addEventListener("timeupdate", onTime);
-    return () => a.removeEventListener("timeupdate", onTime);
+    return () => {
+      clearInterval(timer);
+      if (audio && onTime) audio.removeEventListener("timeupdate", onTime);
+    };
   }, [enabled, trackId]);
 
   // ── Position ───────────────────────────────────────────
@@ -90,14 +100,17 @@ export function MusicPlayer() {
   const [mounted, setMounted] = useState(false);
   const fracRef = useRef({ x: 0.88, y: 0.75 });
   const PLAYER_W = 280;
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
 
   const calcPos = (fx: number, fy: number) => {
     if (typeof window === "undefined") return { x: 0, y: 0 };
     const mw = collapsed ? 42 : PLAYER_W;
     const mh = collapsed ? 42 : 280;
+    const maxX = window.innerWidth - mw;
+    const maxY = window.innerHeight - mh - 8; // 8px bottom padding
     return {
-      x: Math.max(0, Math.min(window.innerWidth - mw, Math.round(fx * window.innerWidth))),
-      y: Math.max(0, Math.min(window.innerHeight - mh, Math.round(fy * window.innerHeight))),
+      x: Math.max(0, Math.min(maxX, Math.round(fx * window.innerWidth))),
+      y: Math.max(0, Math.min(maxY, Math.round(fy * window.innerHeight))),
     };
   };
 
@@ -113,17 +126,21 @@ export function MusicPlayer() {
     setPos(calcPos(fracRef.current.x, fracRef.current.y));
   }, []);
 
+  // Re-clamp position on resize / collapse toggle (keeps player visible)
   useEffect(() => {
     if (!mounted) return;
-    const h = () => setPos(calcPos(fracRef.current.x, fracRef.current.y));
-    window.addEventListener("resize", h);
-    return () => window.removeEventListener("resize", h);
+    const clamp = () => {
+      const p = calcPos(fracRef.current.x, fracRef.current.y);
+      // If expanded player would be off-screen to the right, push it left
+      if (!collapsed && p.x + PLAYER_W > window.innerWidth - 8) {
+        fracRef.current.x = Math.max(0, (window.innerWidth - PLAYER_W - 8) / window.innerWidth);
+      }
+      setPos(calcPos(fracRef.current.x, fracRef.current.y));
+    };
+    clamp();
+    window.addEventListener("resize", clamp);
+    return () => window.removeEventListener("resize", clamp);
   }, [mounted, collapsed]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    setPos(calcPos(fracRef.current.x, fracRef.current.y));
-  }, [collapsed, mounted]);
 
   // ── Smooth disc rotation ───────────────────────────────
   const discRef = useRef<HTMLDivElement>(null);
@@ -156,6 +173,11 @@ export function MusicPlayer() {
   const moveDist = useRef(0);
 
   const onDown = (e: React.PointerEvent) => {
+    // 不拦截 range 滑块的原生拖拽交互
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT") return;
+    e.preventDefault(); // prevent text selection while dragging
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragRef.current = { sx: e.clientX, sy: e.clientY, fx: fracRef.current.x, fy: fracRef.current.y, active: true };
     moveDist.current = 0;
   };
@@ -194,7 +216,7 @@ export function MusicPlayer() {
         setPos(calcPos(fx, fy));
       }
     };
-    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
     return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
   }, []);
@@ -256,9 +278,24 @@ export function MusicPlayer() {
   //  Collapsed
   // ═══════════════════════════════════════════════════════
 
+  // Sync dismissed with audio enabled state — hide when turned off, restore state when back on
+  useEffect(() => {
+    if (!enabled) {
+      prevCollapsedRef.current = collapsed;
+      setDismissed(true);
+      setCollapsed(true);
+      if (playing) pause();
+    } else {
+      setDismissed(false);
+      // Restore previous collapsed state (keep expanded if was expanded before dismiss)
+      setCollapsed(prevCollapsedRef.current);
+    }
+  }, [enabled]);
+
   if (collapsed) {
+    if (dismissed) return null;
     return (
-      <div className="fixed z-50" style={{ left: pos.x, top: pos.y }} onPointerDown={onDown}>
+      <div className="fixed z-50 select-none" style={{ left: pos.x, top: pos.y, userSelect: "none", touchAction: "none" }} onPointerDown={onDown}>
         <button
           onClick={() => {
             if (moveDist.current < 4) {
@@ -268,8 +305,8 @@ export function MusicPlayer() {
           }}
           className={`w-[42px] h-[42px] rounded-full flex items-center justify-center interactive shadow-lg text-base border
             ${playing
-              ? "border-primary/40 bg-primary/15 text-primary garden-music-glow"
-              : "border-border/60 bg-card/90 backdrop-blur text-foreground/70 hover:text-foreground hover:border-border"
+              ? "border-primary/60 bg-primary/20 text-primary garden-music-glow"
+              : "border-border/85 bg-card/95 backdrop-blur text-foreground/90 hover:text-foreground hover:border-border"
             }
           `}
           title={enabled ? "展开播放器" : "开启音乐"}
@@ -287,7 +324,7 @@ export function MusicPlayer() {
   const allTracks = getAllTracks();
 
   return (
-    <div className="fixed z-50" style={{ left: pos.x, top: pos.y }} onPointerDown={onDown}>
+    <div className="fixed z-50 select-none" style={{ left: pos.x, top: pos.y, userSelect: "none", touchAction: "none" }} onPointerDown={onDown}>
       {/* Playlist overlay */}
       {showList && (
         <div
@@ -312,9 +349,40 @@ export function MusicPlayer() {
 
       {/* Main card */}
       <div
-        className="garden-card backdrop-blur-xl overflow-hidden cursor-grab active:cursor-grabbing"
-        style={{ width: PLAYER_W }}
+        className="garden-card backdrop-blur-xl overflow-hidden cursor-grab active:cursor-grabbing relative"
+        style={{ width: PLAYER_W, maxWidth: "calc(100vw - 16px)" }}
       >
+        {/* Close button — top-right */}
+        <button
+          onClick={() => {
+            if (playing) pause();
+            toggle(); // disable audio
+            setDismissed(true);
+            setCollapsed(true);
+          }}
+          className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs text-muted-foreground hover:text-red-500 hover:bg-muted interactive z-10"
+          title="关闭播放器"
+        >
+          ✕
+        </button>
+        {/* Collapse button — top-right, next to close */}
+        <button
+          ref={collapseBtnRef}
+          onClick={() => {
+            const r = collapseBtnRef.current?.getBoundingClientRect();
+            if (r) {
+              const fx = (r.left + r.width / 2) / window.innerWidth;
+              const fy = (r.top + r.height / 2) / window.innerHeight;
+              fracRef.current = { x: fx, y: fy };
+              setPos(calcPos(fx, fy));
+            }
+            setCollapsed(true);
+          }}
+          className="absolute top-2 right-8 w-6 h-6 rounded-full flex items-center justify-center text-xs text-muted-foreground hover:text-foreground hover:bg-muted interactive z-10"
+          title="最小化"
+        >
+          —
+        </button>
         {/* ── Cover + Disc ── */}
         <div className="relative flex items-center justify-center pt-4 pb-1">
           <div
@@ -386,14 +454,6 @@ export function MusicPlayer() {
             <LoopIcon mode={loopMode} size={13} />
           </CtrlBtn>
 
-          {/* Collapse */}
-          <button
-            onClick={() => setCollapsed(true)}
-            className="text-[0.688rem] text-foreground/50 hover:text-foreground interactive shrink-0"
-            title="最小化"
-          >
-            —
-          </button>
         </div>
 
         {/* ── Volume ── */}

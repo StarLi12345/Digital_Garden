@@ -1,11 +1,11 @@
 "use client";
 
 // ============================================================
-// Digital Garden — Weather Widget v2（真实天气 + Mock 回退）
+// Digital Garden — Weather Widget v3（真实天气）
 // ============================================================
-// · OpenWeather One Call API 3.0 / Current Weather Data
-// · API Key 从 localStorage "garden-owm-key" 读取
-// · 无 Key 或请求失败时自动回退 Mock 数据
+// · OpenWeather Current Weather Data API
+// · API Key: localStorage "garden-owm-key" 或内置默认 Key
+// · 使用浏览器 Geolocation 获取定位，失败回退北京
 // ============================================================
 
 import { useState, useEffect } from "react";
@@ -19,22 +19,9 @@ interface WeatherData {
   city?: string;
 }
 
-const MOCK_POOL: WeatherData[] = [
-  { temp: 28, condition: "晴朗", icon: "☀️", humidity: 45, windSpeed: 12 },
-  { temp: 22, condition: "多云", icon: "⛅", humidity: 60, windSpeed: 8 },
-  { temp: 18, condition: "小雨", icon: "🌧", humidity: 80, windSpeed: 15 },
-  { temp: 30, condition: "炎热", icon: "🔥", humidity: 35, windSpeed: 5 },
-  { temp: 15, condition: "凉爽", icon: "🍃", humidity: 55, windSpeed: 20 },
-  { temp: 8, condition: "寒冷", icon: "❄️", humidity: 70, windSpeed: 10 },
-];
-
 const DAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+const DEFAULT_KEY = "0a81956b3315eb718b0cf79850b56296";
 
-function getMockWeather(): WeatherData {
-  return MOCK_POOL[new Date().getDate() % MOCK_POOL.length];
-}
-
-// OpenWeather condition code → icon + Chinese label
 function owmToWeather(data: {
   main: { temp: number; humidity: number };
   weather: [{ id: number; description: string }];
@@ -56,14 +43,13 @@ function owmToWeather(data: {
     condition: data.weather[0].description,
     icon,
     humidity: data.main.humidity,
-    windSpeed: Math.round(data.wind.speed * 3.6), // m/s → km/h
+    windSpeed: Math.round(data.wind.speed * 3.6),
     city: data.name,
   };
 }
 
 async function fetchWeather(apiKey: string, lat?: number, lon?: number): Promise<WeatherData | null> {
   try {
-    // Try geolocation or default to Beijing
     const url = lat && lon
       ? `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=zh_cn`
       : `https://api.openweathermap.org/data/2.5/weather?q=Beijing&appid=${apiKey}&units=metric&lang=zh_cn`;
@@ -77,6 +63,21 @@ async function fetchWeather(apiKey: string, lat?: number, lon?: number): Promise
   }
 }
 
+/** IP-based geolocation fallback — used when browser geolocation is blocked (e.g. non-HTTPS mobile) */
+async function fetchIPLocation(): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const res = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.latitude && data.longitude) {
+      return { lat: data.latitude, lon: data.longitude };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function WeatherWidget({ className = "" }: { className?: string }) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,41 +86,30 @@ export function WeatherWidget({ className = "" }: { className?: string }) {
   useEffect(() => {
     setMounted(true);
     const apiKey = (() => {
-      try { return localStorage.getItem("garden-owm-key") || ""; } catch { return ""; }
+      try { return localStorage.getItem("garden-owm-key") || DEFAULT_KEY; } catch { return DEFAULT_KEY; }
     })();
 
-    if (apiKey) {
-      // Try geolocation for accurate weather
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const data = await fetchWeather(apiKey, pos.coords.latitude, pos.coords.longitude);
-            const w = data || getMockWeather();
-            setWeather(w);
-            try { localStorage.setItem("garden-weather-condition", w.condition); } catch {}
-            window.dispatchEvent(new CustomEvent("garden-weather"));
-            setLoading(false);
-          },
-          async () => {
-            const data = await fetchWeather(apiKey);
-            const w = data || getMockWeather();
-            setWeather(w);
-            try { localStorage.setItem("garden-weather-condition", w.condition); } catch {}
-            window.dispatchEvent(new CustomEvent("garden-weather"));
-            setLoading(false);
-          }
-        );
-      } else {
-        fetchWeather(apiKey).then((data) => {
-          setWeather(data || getMockWeather());
-          setLoading(false);
-        });
+    const applyWeather = (data: WeatherData | null) => {
+      if (data) {
+        setWeather(data);
+        try { localStorage.setItem("garden-weather-condition", data.condition); } catch {}
+        window.dispatchEvent(new CustomEvent("garden-weather"));
       }
-    } else {
-      const w = getMockWeather();
-      setWeather(w);
-      try { localStorage.setItem("garden-weather-condition", w.condition); } catch {}
       setLoading(false);
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => { applyWeather(await fetchWeather(apiKey, pos.coords.latitude, pos.coords.longitude)); },
+        async () => {
+          // Browser geolocation blocked (common on HTTP/non-localhost mobile)
+          const ipLoc = await fetchIPLocation();
+          if (ipLoc) applyWeather(await fetchWeather(apiKey, ipLoc.lat, ipLoc.lon));
+          else applyWeather(await fetchWeather(apiKey)); // fallback to Beijing
+        }
+      );
+    } else {
+      fetchWeather(apiKey).then(applyWeather);
     }
   }, []);
 

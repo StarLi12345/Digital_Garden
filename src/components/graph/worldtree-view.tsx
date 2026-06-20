@@ -46,6 +46,7 @@ export function WorldTreeView({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState({ scale: 1, panX: 0, panY: 0, dragging: false, dragStartX: 0, dragStartY: 0 });
+  const touchRef = useRef<{ lastDist: number | null; lastPanX: number; lastPanY: number }>({ lastDist: null, lastPanX: 0, lastPanY: 0 });
   const initialCenterDone = useRef(false);
 
   // Zoom on wheel
@@ -60,7 +61,7 @@ export function WorldTreeView({
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Pan on drag
+  // Pan on mouse drag
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target === svgRef.current || (e.target as Element).tagName === "svg") {
       setZoom((z) => ({ ...z, dragging: true, dragStartX: e.clientX - z.panX, dragStartY: e.clientY - z.panY }));
@@ -71,6 +72,41 @@ export function WorldTreeView({
     setZoom((z) => ({ ...z, panX: e.clientX - z.dragStartX, panY: e.clientY - z.dragStartY }));
   }, [zoom.dragging]);
   const onMouseUp = useCallback(() => setZoom((z) => ({ ...z, dragging: false })), []);
+
+  // Touch: single-finger pan, two-finger pinch zoom
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      setZoom((prev) => {
+        touchRef.current = { lastDist: null, lastPanX: prev.panX, lastPanY: prev.panY };
+        return { ...prev, dragging: true, dragStartX: t.clientX - prev.panX, dragStartY: t.clientY - prev.panY };
+      });
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchRef.current.lastDist = Math.sqrt(dx * dx + dy * dy);
+    }
+  }, []);
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && zoom.dragging) {
+      const t = e.touches[0];
+      setZoom((z) => ({ ...z, panX: t.clientX - z.dragStartX, panY: t.clientY - z.dragStartY }));
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (touchRef.current.lastDist != null) {
+        const scale = dist / touchRef.current.lastDist;
+        setZoom((z) => ({ ...z, scale: Math.min(3, Math.max(0.2, z.scale * scale)) }));
+      }
+      touchRef.current.lastDist = dist;
+    }
+  }, [zoom.dragging]);
+  const onTouchEnd = useCallback(() => {
+    setZoom((prev) => ({ ...prev, dragging: false }));
+    touchRef.current.lastDist = null;
+  }, []);
 
   // ── Build tree ────────────────────────────────────────
   const treeRoot = useMemo(() => {
@@ -136,23 +172,36 @@ export function WorldTreeView({
     } as TreeNode;
   }, [graphData]);
 
+  // ── Responsive sizing ──────────────────────────────────
+  const [containerWidth, setContainerWidth] = useState(800);
+  useEffect(() => {
+    const el = containerRef.current; if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // ── D3 layout (adaptive separation) ────────────────────
   const layoutData = useMemo(() => {
     if (!treeRoot || treeRoot.children.length === 0) return null;
 
     const root = d3Hierarchy(treeRoot);
+    const isMobile = containerWidth < 640;
 
-    const V = 150; // vertical spacing
-
-    // Base horizontal spacing: wider when there are more nodes total
+    const V = isMobile ? 100 : 150; // vertical spacing
     const totalNodes = graphData.nodes.length;
-    const H = totalNodes > 30 ? 55 : totalNodes > 15 ? 65 : 80;
+
+    // Horizontal spacing: scales down on mobile
+    const H = isMobile
+      ? (totalNodes > 30 ? 30 : totalNodes > 15 ? 35 : 40)
+      : (totalNodes > 30 ? 55 : totalNodes > 15 ? 65 : 80);
 
     const layout = d3Tree<TreeNode>()
       .nodeSize([H, V])
       .separation((a, b) => {
         const sameParent = a.parent === b.parent;
-        // Slightly more space between different-parent nodes
         return sameParent ? 1.1 : 1.6;
       });
 
@@ -160,9 +209,7 @@ export function WorldTreeView({
 
     const positionedNodes: { x: number; y: number; data: TreeNode }[] = [];
     const positionedLinks: { sx: number; sy: number; tx: number; ty: number; data: TreeNode }[] = [];
-    const maxDepth = root.height || 1;
 
-    // Top-down: root at depth 0 → top, leaves at bottom
     root.each((node) => {
       positionedNodes.push({
         x: node.x!, y: (node.depth || 0) * V, data: node.data,
@@ -184,15 +231,17 @@ export function WorldTreeView({
       if (y < minY) minY = y; if (y > maxY) maxY = y;
     });
 
-    const pad = 80;
+    const pad = isMobile ? 30 : 80;
+    const naturalW = maxX - minX + pad * 2;
+    const naturalH = maxY - minY + pad * 2;
     return {
       nodes: positionedNodes, links: positionedLinks,
-      width: Math.max(800, maxX - minX + pad * 2),
-      height: Math.max(500, maxY - minY + pad * 2),
+      width: Math.max(containerWidth, naturalW),
+      height: Math.max(isMobile ? 400 : 500, naturalH),
       offsetX: -minX + pad,
       offsetY: -minY + pad,
     };
-  }, [treeRoot]);
+  }, [treeRoot, containerWidth, graphData.nodes.length]);
 
   // Follow mode: instant center on current wavefront node.
   useEffect(() => {
@@ -216,13 +265,22 @@ export function WorldTreeView({
     }));
   }, [followMode, animProgress, layoutData]);
 
-  // Auto-center on first layout (only when not following)
+  // Auto-center on root node — anchor root 🌱 at viewport center (horizontally) and 25% from top
   useEffect(() => {
     if (!layoutData || initialCenterDone.current) return;
     initialCenterDone.current = true;
-    const c = containerRef.current; if (!c) return;
-    // Center horizontally, start from top
-    setZoom((z) => ({ ...z, panX: c.clientWidth / 2 - layoutData.width / 2, panY: 20 }));
+    // Find the root node in layout coordinates
+    const rootNode = layoutData.nodes.find((n) => n.data.id === "__root__");
+    if (!rootNode) return;
+    const rootX = rootNode.x + (layoutData.offsetX || 0);
+    const rootY = rootNode.y + (layoutData.offsetY || 0);
+    // The SVG maps layout coordinates to screen via viewBox.
+    // To place root at horizontal center + 25% from top of viewport:
+    setZoom((z) => ({
+      ...z,
+      panX: layoutData.width / 2 - rootX * z.scale,
+      panY: layoutData.height * 0.25 - rootY * z.scale,
+    }));
   }, [layoutData]);
 
   // ── Render ───────────────────────────────────────────
@@ -236,6 +294,7 @@ export function WorldTreeView({
   }
 
   const { nodes, links, width, height, offsetX, offsetY } = layoutData;
+  const isMobile = containerWidth < 640;
   const aspect = (width / height).toFixed(4);
 
   const handleNodeClick = (data: TreeNode) => {
@@ -252,11 +311,14 @@ export function WorldTreeView({
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="xMidYMid meet"
         className="w-full cursor-grab"
-        style={{ aspectRatio: aspect, background: "transparent", display: "block" }}
+        style={{ aspectRatio: aspect, background: "transparent", display: "block", touchAction: "none" }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
       >
         <g transform={`translate(${zoom.panX},${zoom.panY}) scale(${zoom.scale})`}>
         <defs>
@@ -300,8 +362,10 @@ export function WorldTreeView({
 
           const color = data.color;
           const highlighted = highlightedNodeIds.has(data.id);
-          const fs = 12, radius = 7;
-          const displayName = data.name.length > 12 ? data.name.slice(0,11)+"…" : data.name;
+          const fs = isMobile ? 10 : 12;
+          const radius = isMobile ? 5 : 7;
+          const maxName = isMobile ? 8 : 12;
+          const displayName = data.name.length > maxName ? data.name.slice(0, maxName - 1) + "…" : data.name;
 
           // Alternate label position to avoid overlap with neighbors:
           // even siblingIndex → label below, odd → label above

@@ -26,7 +26,7 @@ const START_TIME = Date.now();
 export async function GET() {
   const health: HealthResponse = {
     status: "ok",
-    version: "3.0-cloud",
+    version: "4.0",
     buildTime: BUILD_TIMESTAMP,
     database: "disconnected",
     environment: process.env.NODE_ENV || "development",

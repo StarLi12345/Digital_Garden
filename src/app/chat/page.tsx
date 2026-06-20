@@ -8,7 +8,7 @@
 // Markdown rendering, garden context injection.
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { marked } from "marked";
 // playTTS import removed — TTS paused (2026-06-13)
 // Re-add when TTS is re-enabled
@@ -64,25 +64,88 @@ function saveSessions(sessions: Session[]) {
 
 function getApiConfig() {
   if (typeof window === "undefined")
-    return { url: "", key: "", model: "deepseek-v4-flash" };
+    return { url: "", key: "", model: "" };
   return {
     url: localStorage.getItem(API_CONFIG_KEYS.url) || "",
     key: localStorage.getItem(API_CONFIG_KEYS.key) || "",
-    model: localStorage.getItem(API_CONFIG_KEYS.model) || "deepseek-v4-flash",
+    model: localStorage.getItem(API_CONFIG_KEYS.model) || "",
   };
 }
 
 // ── Markdown Renderer ─────────────────────────────────
 
 function MarkdownContent({ content }: { content: string }) {
-  // Configure marked for safe rendering
-  const html = marked.parse(content, { async: false }) as string;
+  const html = useMemo(() => {
+    try { return marked.parse(content, { async: false }) as string; }
+    catch { return content; }
+  }, [content]);
 
   return (
     <div
       className="prose prose-sm max-w-none text-foreground chat-markdown"
       dangerouslySetInnerHTML={{ __html: html }}
     />
+  );
+}
+
+// ── Sidebar Content (shared between mobile/desktop) ───
+
+function SidebarContent({
+  sessions, activeSessionId, onSelect, onNew, onDelete, onClose,
+}: {
+  sessions: Session[];
+  activeSessionId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="p-3 flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={onClose}
+          className="w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted interactive flex items-center justify-center shrink-0"
+          title="关闭侧栏"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4l-6 8M5 4l6 8"/></svg>
+        </button>
+        <button
+          onClick={onNew}
+          className="flex-1 rounded-md bg-primary text-white px-2.5 py-1.5 text-xs font-medium hover:bg-primary-hover interactive"
+        >
+          + 新对话
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
+        {sessions.length === 0 ? (
+          <p className="px-2.5 py-4 text-xs text-muted-foreground text-center">
+            暂无对话记录
+          </p>
+        ) : (
+          sessions.map((s) => (
+            <div
+              key={s.id}
+              className={`group flex items-center rounded-lg px-2.5 py-1.5 cursor-pointer interactive text-xs transition-colors ${
+                s.id === activeSessionId
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              }`}
+              onClick={() => onSelect(s.id)}
+            >
+              <span className="truncate flex-1">{s.name}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 ml-1 shrink-0"
+                title="删除对话"
+              >
+                ✕
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </>
   );
 }
 
@@ -367,62 +430,98 @@ export default function ChatPage() {
     []
   );
 
-  // ── Render ───────────────────────────────────────────
-
+  // ── Mobile-aware sidebar ─────────────────────────────
+  const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // On mobile, default sidebar closed
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+    else setSidebarOpen(true);
+  }, [isMobile]);
+
+  // ── Render ───────────────────────────────────────────
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)]" data-page="chat">
-      {/* Left sidebar — ChatGPT-style: collapse to icon strip */}
-      <aside
-        className={`shrink-0 sticky top-14 self-start border-r border-border bg-card/40 flex flex-col transition-all duration-200 overflow-hidden ${
-          sidebarOpen ? "w-52 h-[calc(100vh-3.5rem)]" : "w-0 border-r-0"
-        }`}
-      >
-        <div className="p-3 flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted interactive flex items-center justify-center shrink-0"
-            title="关闭侧栏"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4l-6 8M5 4l6 8"/></svg>
-          </button>
-          <button
-            onClick={newSession}
-            className="flex-1 rounded-md bg-primary text-white px-2.5 py-1.5 text-xs font-medium hover:bg-primary-hover interactive"
-          >
-            + 新对话
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
-          {sessions.map((s) => (
-            <div
-              key={s.id}
-              className={`group flex items-center rounded-lg px-2.5 py-1.5 cursor-pointer interactive text-xs transition-colors ${
-                s.id === activeSessionId
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              }`}
-              onClick={() => setActiveSessionId(s.id)}
+      {/* Mobile sidebar — full-screen overlay like ChatGPT mobile */}
+      {isMobile && sidebarOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "var(--color-background)" }}>
+          {/* Header bar */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted interactive flex items-center justify-center"
             >
-              <span className="truncate flex-1">{s.name}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteSession(s.id);
-                }}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 ml-1 shrink-0"
-                title="删除对话"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4l-6 8M5 4l6 8"/></svg>
+            </button>
+            <span className="text-sm font-medium text-foreground">对话列表</span>
+            <button
+              onClick={() => { newSession(); setSidebarOpen(false); }}
+              className="ml-auto rounded-md bg-primary text-white px-3 py-1.5 text-xs font-medium hover:bg-primary-hover interactive"
+            >
+              + 新对话
+            </button>
+          </div>
+          {/* Session list */}
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
+            {sessions.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-12">暂无对话记录</p>
+            ) : (
+              sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={`group flex items-center rounded-lg px-3 py-2.5 cursor-pointer interactive text-sm transition-colors ${
+                    s.id === activeSessionId
+                      ? "bg-muted text-foreground font-medium"
+                      : "text-foreground hover:bg-muted/60"
+                  }`}
+                  onClick={() => { setActiveSessionId(s.id); setSidebarOpen(false); }}
+                >
+                  <span className="truncate flex-1">{s.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                    className="opacity-60 hover:opacity-100 text-muted-foreground hover:text-red-500 ml-2 shrink-0 p-1"
+                    title="删除对话"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </aside>
+      )}
 
-      {/* Sidebar expand handle when collapsed */}
-      {!sidebarOpen && (
+      {/* Desktop sidebar — inline layout */}
+      {!isMobile && (
+        <aside
+          className={`shrink-0 sticky top-14 self-start border-r border-border bg-card/40 flex flex-col transition-all duration-200 ${
+            sidebarOpen ? "w-52 h-[calc(100vh-3.5rem)]" : "w-0 border-r-0 overflow-hidden"
+          }`}
+        >
+          {sidebarOpen && (
+            <SidebarContent
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSelect={setActiveSessionId}
+              onNew={newSession}
+              onDelete={deleteSession}
+              onClose={() => setSidebarOpen(false)}
+            />
+          )}
+        </aside>
+      )}
+
+      {/* Sidebar expand handle when collapsed (desktop only) */}
+      {!isMobile && !sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
           className="shrink-0 w-8 border-r border-border bg-card/30 flex flex-col items-center pt-3 gap-3 text-muted-foreground hover:text-foreground hover:bg-muted/30 interactive"
@@ -434,6 +533,33 @@ export default function ChatPage() {
 
       {/* Main chat area */}
       <main className="flex-1 flex flex-col min-w-0">
+        {/* Mobile header: hamburger + title */}
+        {isMobile && (
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted interactive flex items-center justify-center"
+              title="对话列表"
+            >
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M2 3h12v2H2zM2 7h8v2H2zM2 11h5v2H2z"/>
+              </svg>
+            </button>
+            <span className="text-sm font-medium text-foreground truncate">
+              {activeSession?.name || "花园伙伴"}
+            </span>
+            <button
+              onClick={newSession}
+              className="ml-auto w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted interactive flex items-center justify-center"
+              title="新对话"
+            >
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M8 3v10M3 8h10"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 px-4 py-4 space-y-4">
           {!activeSession || activeSession.messages.length === 0 ? (

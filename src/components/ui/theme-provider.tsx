@@ -30,7 +30,7 @@ function setCookie(name: string, value: string) {
 
 function resolveTheme(theme: Theme): "light" | "dark" {
   if (theme === "system") {
-    if (typeof window === "undefined") return "light";
+    if (typeof window === "undefined") return "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
@@ -40,10 +40,18 @@ function resolveTheme(theme: Theme): "light" | "dark" {
 
 function applyTheme(resolved: "light" | "dark") {
   const root = document.documentElement;
-  if (resolved === "dark") {
-    root.classList.add("dark");
+  const toggle = () => {
+    if (resolved === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  };
+  // Use View Transition API for smooth crossfade (supported in Chrome 111+, Edge 111+)
+  if (document.startViewTransition) {
+    document.startViewTransition(() => toggle());
   } else {
-    root.classList.remove("dark");
+    toggle();
   }
 }
 

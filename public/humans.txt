@@ -1,0 +1,11 @@
+/* TEAM */
+Owner & Developer: Star.Li曦曜
+Site: https://starli-digital-garden.cn
+From: China
+Created: 2026-06-13
+Made with: Next.js, TypeScript, Tailwind CSS, Prisma, Live2D Cubism SDK
+
+/* SITE */
+Last update: 2026-06-18
+Components: Digital Garden 4.0
+Language: Chinese (zh-CN)

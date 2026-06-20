@@ -9,17 +9,20 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { TitleInput, TypeSelector, TagInput } from "@/components/form";
+import { TitleInput, TypeSelector } from "@/components/form";
+import TagAutocomplete from "@/components/form/tag-autocomplete";
 import EditorWrapper from "@/components/editor/editor-wrapper";
 import EntryRenderer from "@/components/editor/entry-renderer";
 import { CoverImage } from "@/components/editor/cover-image";
 import { EditorFontSize } from "@/components/editor/editor-font-size";
 import { SourceMode } from "@/components/editor/source-mode";
+import SyntaxHelp from "@/components/editor/syntax-help";
 import { TocHighlighter } from "@/components/editor/toc-highlighter";
 import type { EditorChangePayload } from "@/components/editor/tiptap-editor";
+import { countWords, readingTimeMinutes } from "@/lib/word-count";
 import { getEntryBySlug, updateEntry, deleteEntry, getBacklinks, getOutlinks, getLinkStats } from "@/actions/entry-actions";
-import { exportMD, exportWord, exportPDF } from "@/lib/export-utils";
-import { jsonToHtml } from "@/lib/tiptap-render";
+import { exportMD, exportWord, exportPDF, generateExportHtml } from "@/lib/export-utils";
+import { sanitizeNode } from "@/lib/tiptap-render";
 import { jsonToMarkdown } from "@/lib/markdown";
 import { TYPE_LABELS } from "@/lib/constants";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -91,6 +94,7 @@ export default function EntryPage({ params }: EntryPageProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showSyntaxHelp, setShowSyntaxHelp] = useState(false);
 
   // ── Related entries ────────────────────────────────────
   const [backlinks, setBacklinks] = useState<any[]>([]);
@@ -134,7 +138,7 @@ export default function EntryPage({ params }: EntryPageProps) {
 
     // Parse content and extract cover image
     try {
-      const parsed = JSON.parse(entry.content);
+      const parsed = sanitizeNode(JSON.parse(entry.content));
       const { coverImage, cleanContent } = extractCover(parsed);
       setEditCover(coverImage);
       setEditContent(cleanContent);
@@ -271,7 +275,7 @@ export default function EntryPage({ params }: EntryPageProps) {
 
   if (mode === "view") {
     return (
-      <div className="reading-container py-12">
+      <><div className="reading-container py-12">
         <Breadcrumb items={[{ label: "花园", href: "/garden" }, { label: entry.title }]} />
 
         <header className="mb-8">
@@ -306,7 +310,7 @@ export default function EntryPage({ params }: EntryPageProps) {
 
         <div className="lg:flex lg:gap-10">
           <article className="min-w-0 flex-1 mb-8">
-            <EntryRenderer content={entry.content} />
+            <EntryRenderer content={entry.content} contentMd={entry.contentMd} />
           </article>
           <aside className="hidden lg:block w-44 shrink-0">
             <div className="sticky top-20">
@@ -348,28 +352,28 @@ export default function EntryPage({ params }: EntryPageProps) {
           </section>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 garden-toolbar px-2 sm:px-3 py-2">
           <button onClick={enterEdit}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover interactive">
             <span className="text-sm leading-none">✏️</span>编辑
           </button>
           <button onClick={handleDelete} disabled={deleting}
-            className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 interactive disabled:opacity-50 disabled:cursor-not-allowed">
+            className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-card px-4 py-2 text-sm text-red-600 hover:bg-red-50 interactive disabled:opacity-50 disabled:cursor-not-allowed">
             <span className="text-sm leading-none">🗑</span>{deleting ? "删除中…" : "删除"}
           </button>
           <div className="relative group">
-            <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted interactive">
+            <button className="garden-ctrl-btn-muted text-sm px-3 py-1.5 interactive">
               <span className="text-sm leading-none">📥</span>导出
             </button>
             <div className="absolute bottom-full left-0 mb-1 rounded-lg border border-border bg-card shadow-lg p-1.5 min-w-[130px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
                     const parsed = JSON.parse(entry.content);
                     const freshMd = jsonToMarkdown(parsed);
-                    exportMD(entry.title, freshMd);
+                    await exportMD(entry.title, freshMd);
                   } catch {
-                    exportMD(entry.title, entry.contentMd);
+                    await exportMD(entry.title, entry.contentMd);
                   }
                 }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted interactive text-left text-foreground"
@@ -377,9 +381,11 @@ export default function EntryPage({ params }: EntryPageProps) {
                 📝 Markdown
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    const html = jsonToHtml(JSON.parse(entry.content));
+                    const parsed = JSON.parse(entry.content);
+                    const md = jsonToMarkdown(parsed);
+                    const html = await generateExportHtml(entry.title, md || entry.contentMd);
                     exportWord(entry.title, html);
                   } catch {}
                 }}
@@ -390,8 +396,10 @@ export default function EntryPage({ params }: EntryPageProps) {
               <button
                 onClick={async () => {
                   try {
-                    const html = jsonToHtml(JSON.parse(entry.content));
-                    await exportPDF(entry.title, html);
+                    const parsed = JSON.parse(entry.content);
+                    const md = jsonToMarkdown(parsed);
+                    const html = await generateExportHtml(entry.title, md || entry.contentMd);
+                    exportPDF(entry.title, html);
                   } catch {}
                 }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted interactive text-left text-foreground"
@@ -401,11 +409,21 @@ export default function EntryPage({ params }: EntryPageProps) {
             </div>
           </div>
           <Link href="/garden"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted interactive">
+            className="garden-ctrl-btn-muted text-sm px-3 py-1.5 interactive">
             返回列表
           </Link>
         </div>
       </div>
+      {/* Word counter (view mode) */}
+      {entry.contentMd && (
+        <div className="fixed bottom-4 right-4 z-40 rounded-full bg-card border border-border shadow-lg px-4 py-2 flex items-center gap-2 text-xs text-muted-foreground pointer-events-none select-none">
+          <span className="font-medium text-foreground">{countWords(entry.contentMd)}</span>
+          <span>词</span>
+          <span className="text-border">/</span>
+          <span>{readingTimeMinutes(countWords(entry.contentMd))} 分钟</span>
+        </div>
+      )}
+    </>
     );
   }
 
@@ -415,15 +433,23 @@ export default function EntryPage({ params }: EntryPageProps) {
     <div className="flex h-[calc(100vh-3.5rem)]" onKeyDown={handleKeyDown}>
       {/* Main editor area — like /plant */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto py-12 px-6" style={{ maxWidth: "920px" }}>
+        <div className="mx-auto py-12 px-6" style={{ maxWidth: "1200px" }}>
           {/* Breadcrumb */}
           <Breadcrumb items={[{ label: "花园", href: "/garden" }, { label: entry.title }]} />
 
-          {/* Edit mode badge */}
+          {/* Edit mode badge + syntax help */}
           <div className="flex items-center gap-3 mb-4 mt-2">
             <span className="inline-flex items-center rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
               编辑中
             </span>
+            <div className="flex-1" />
+            <button
+              onClick={() => setShowSyntaxHelp(true)}
+              className="garden-ctrl-btn-muted interactive"
+              title="查看 Mermaid 和 LaTeX 语法帮助"
+            >
+              📖 语法帮助
+            </button>
           </div>
 
           {/* Cover image */}
@@ -492,15 +518,18 @@ export default function EntryPage({ params }: EntryPageProps) {
             )}
           </div>
 
-          {/* Editor font size + Meta + Save */}
+          {/* Editor font size + Meta + Save — wraps on mobile */}
           <div className="mt-5 pt-4 border-t border-border space-y-3">
             <EditorFontSize />
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground shrink-0">类型</span>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 garden-toolbar px-2 sm:px-4 py-2">
+              <span className="text-[0.6rem] sm:text-xs text-muted-foreground shrink-0">类型</span>
               <TypeSelector value={editType} onChange={setEditType} />
+              <div className="flex-1 hidden sm:block" />
+              <div className="w-full sm:w-auto sm:flex-1">
+                <TagAutocomplete value={editTags} onChange={setEditTags} />
+              </div>
             </div>
-            <TagInput value={editTags} onChange={setEditTags} />
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-2 sm:gap-3 pt-1">
               <button
                 onClick={handleSave}
                 disabled={saving}
@@ -515,7 +544,7 @@ export default function EntryPage({ params }: EntryPageProps) {
               <button
                 onClick={cancelEdit}
                 disabled={saving}
-                className="text-sm text-muted-foreground hover:text-foreground interactive"
+                className="garden-ctrl-btn-muted text-sm px-3 py-1.5 interactive disabled:opacity-50"
               >
                 取消
               </button>
@@ -524,6 +553,19 @@ export default function EntryPage({ params }: EntryPageProps) {
           </div>
         </div>
       </div>
+
+      {/* Word counter (edit mode) */}
+      {editContentMd && (
+        <div className="fixed bottom-4 right-4 z-40 rounded-full bg-card border border-border shadow-lg px-4 py-2 flex items-center gap-2 text-xs text-muted-foreground pointer-events-none select-none">
+          <span className="font-medium text-foreground">{countWords(editContentMd)}</span>
+          <span>词</span>
+          <span className="text-border">/</span>
+          <span>{readingTimeMinutes(countWords(editContentMd))} 分钟</span>
+        </div>
+      )}
+
+      {/* Syntax help modal */}
+      <SyntaxHelp open={showSyntaxHelp} onClose={() => setShowSyntaxHelp(false)} />
     </div>
   );
 }

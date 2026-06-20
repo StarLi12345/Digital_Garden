@@ -221,7 +221,7 @@
   --font-size-md: 16px;
   --font-size-lg: 18px;
   --font-size-xl: 20px;
-  --reading-width: 860px;
+  --reading-width: 1200px;
   --reading-line-height: 1.78;
   --reading-font-size: var(--font-size-base);
   --para-spacing: 1em;
@@ -300,6 +300,11 @@ html {
   /* Firefox */
   scrollbar-width: thin;
   scrollbar-color: var(--color-primary) transparent;
+  /* Prevent body background-color propagation to viewport,
+     which would otherwise cover negative-z-index background layers */
+  background-color: var(--color-background);
+  /* Native browser dark/light rendering optimizations */
+  color-scheme: light dark;
 }
 
 /* WebKit scrollbar */
@@ -320,7 +325,7 @@ html {
 
 body {
   margin: 0;
-  background-color: var(--color-background);
+  background-color: transparent;
   color: var(--color-foreground);
   font-family: var(--ui-font-family, var(--font-sans));
   font-size: var(--ui-font-size, var(--reading-font-size));
@@ -379,7 +384,7 @@ body {
 }
 /* Very small screens (< 400px) */
 @media (max-width: 400px) {
-  .reading-container { padding-left: 0.5em; padding-right: 0.5em; }
+  .reading-container { padding-left: 1em; padding-right: 1em; }
   .garden-editor-area .ProseMirror { padding: 0.8em 0.5em; font-size: var(--editor-font-size, 14px); }
   .garden-nav { padding-left: 0.5em; padding-right: 0.5em; }
 }
@@ -387,12 +392,55 @@ body {
 /* ── Background system (handled by BackgroundProvider component) ── */
 
 /* ── Utility ───────────────────────────────────────────── */
-.interactive { transition: all 0.15s ease-out; }
-.interactive:hover { transition: all 0.15s ease-out; }
+.interactive { transition: color 0.15s ease-out, background-color 0.15s ease-out, opacity 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out; }
+.interactive:hover { transition: color 0.15s ease-out, background-color 0.15s ease-out, opacity 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out; }
 .focus-ring:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-ring);
   border-radius: var(--radius-sm);
+}
+
+/* ── Glass toolbar: opaque backdrop for controls over background images ── */
+.garden-toolbar {
+  background: var(--color-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.garden-ctrl-btn {
+  background: var(--color-card);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-foreground);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.625rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.garden-ctrl-btn:hover {
+  background: var(--color-card-hover);
+  color: var(--color-foreground);
+}
+.garden-ctrl-btn-muted {
+  background: var(--color-card);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted-foreground);
+  font-size: 0.688rem;
+  padding: 0.2rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.garden-ctrl-btn-muted:hover {
+  background: var(--color-card-hover);
+  color: var(--color-foreground);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -561,7 +609,7 @@ body {
   border-radius: 3px;
   font-family: var(--font-mono);
   font-size: 0.88em;
-  color: var(--color-primary);
+  color: var(--color-foreground);
 }
 
 /* 链接 */
@@ -588,10 +636,12 @@ body {
   box-shadow: var(--card-shadow-hover);
 }
 
-/* 分割线 */
+/* 分割线 — 用 muted-foreground 确保深浅色模式下都清晰可见 */
 .prose hr, .ProseMirror hr {
   border: none;
-  border-top: 1px solid var(--color-border);
+  height: 1px;
+  background: var(--color-muted-foreground);
+  opacity: 0.35;
   margin: 2em 0;
 }
 
@@ -769,12 +819,7 @@ section {
    RUNTIME TIME/WEATHER FILTER
    ═══════════════════════════════════════════════════════ */
 
-.runtime-tint {
-  position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  display: var(--rt-tint-display, none);
-  background: var(--rt-tint-color, transparent);
-  transition: background 2s ease;
-}
+/* runtime-tint removed */
 
 /* ═══════════════════════════════════════════════════════
    EDITOR — ProseMirror 样式
@@ -950,9 +995,43 @@ nav.garden-nav::before {
   100% { transform: rotate(0deg); }
 }
 
-/* ── Live2D: canvas needs pointer-events for drag+wheel; tips overlay stay above ── */
+/* ── Live2D: tips overlay stay above canvas, opaque for readability ── */
 #waifu-tips {
   pointer-events: none !important;
+  background: var(--color-card) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── Live2D: tap-to-show toolbar on touch devices, auto-hide after 3s ── */
+#waifu-tool.waifu-tool-visible {
+  opacity: 1 !important;
+  transition: opacity 0.2s;
+}
+#waifu-tool:not(.waifu-tool-visible) {
+  transition: opacity 0.5s;
+}
+
+/* Raise waifu toolbar so all icons are visible */
+#waifu-tool {
+  top: 0 !important;
+}
+
+/* Ensure waifu toggle sits above the waifu container and is tappable */
+#waifu-toggle {
+  z-index: 61 !important;
+}
+
+/* Mobile: make waifu toggle button easier to tap (25px visible) */
+@media (max-width: 640px) {
+  #waifu-toggle {
+    touch-action: manipulation;
+    min-height: 44px;
+    padding: 10px 5px !important;
+  }
+  #waifu-toggle.waifu-toggle-active {
+    margin-left: -35px !important;
+  }
 }
 
 /* ── Garden theme: interactive element refinements ─── */
@@ -1014,31 +1093,6 @@ nav.garden-nav::before {
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ═══════════════════════════════════════════════════════
-   DAYTIME DYNAMIC THEME — 昼夜动态主题
-   ═══════════════════════════════════════════════════════ */
-
-/* Daytime overlay — subtle sky-tinted gradient that shifts with time */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: linear-gradient(
-    180deg,
-    var(--daytime-sky-top, transparent) 0%,
-    var(--daytime-sky-bottom, transparent) 100%
-  );
-  opacity: var(--daytime-overlay-opacity, 0);
-  transition: opacity 120s linear;
-}
-
-/* Warmth filter — smooth transition applied to body */
-body {
-  transition: filter 180s ease-in-out;
-}
-
 /* ── Lazy image blur-in ──────────────────────────── */
 img[data-lazy-src]:not(.loaded) {
   filter: blur(10px);
@@ -1072,4 +1126,10 @@ img[data-lazy-src].loaded {
 /* ── Chat page: hide global footer ──────────────── */
 body:has([data-page="chat"]) .garden-footer {
   display: none;
+}
+
+/* ── Smooth theme transitions (View Transition API) ── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.3s;
 }

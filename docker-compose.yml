@@ -1,0 +1,29 @@
+# ============================================================
+# Digital Garden — Docker Compose
+# ============================================================
+# Start:  docker compose up -d
+# Stop:   docker compose down
+# Logs:   docker compose logs -f
+# ============================================================
+
+services:
+  garden:
+    build: .
+    container_name: digital-garden
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # SQLite database persistence
+      - ./data:/app/data
+      # Environment (create this file first)
+      - ./.env.production:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/dev.db
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

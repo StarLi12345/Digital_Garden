@@ -44,7 +44,7 @@ function S(title) { const s = SLUG[title]; if (!s) throw new Error(`Unknown slug
 function L(title, text) { return { type: "text", text: text||title, marks: [{type:"link",attrs:{href:`/entry/${S(title)}`}}] }; }
 
 // ── Helpers ───────────────────────────────────────────
-const T = (t, ...ms) => ms.length ? { type:"text", text:t, marks:ms } : { type:"text", text:t };
+const T = (t, ...ms) => { const realMarks=ms.filter(m=>typeof m==="object"&&!!m&&!!m.type); return realMarks.length?{type:"text",text:t,marks:realMarks}:{type:"text",text:t}; };
 const B = { type:"bold" }, I = { type:"italic" }, U = { type:"underline" }, S_MARK = { type:"strike" };
 const CD = { type:"code" }, HL = (c) => ({ type:"highlight", attrs:{color:c||"#fff176"} });
 const CL = (c) => ({ type:"textStyle", attrs:{color:c} });
@@ -1095,4 +1095,10 @@ function extractMarkdown(json) {
   return lines.join("").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// Only auto-run when executed directly (not when imported by init-production.mjs)
+const isDirectRun = process.argv[1] && (process.argv[1].includes('seed-3.0-content') || process.argv[1].includes('seed-3.0-content.mjs'));
+if (isDirectRun) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
+
+export { E, SLUG, extractMarkdown };

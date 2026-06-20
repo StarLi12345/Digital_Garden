@@ -41,9 +41,8 @@ export default function TitleInput({
           onChange={handleChange}
           maxLength={maxLength + 10}
           placeholder={placeholder}
-          className="w-full bg-transparent text-3xl font-bold text-foreground placeholder:text-muted-foreground/30 focus:outline-none py-2"
+          className="w-full bg-transparent text-2xl sm:text-3xl font-bold text-foreground placeholder:text-muted-foreground/30 focus:outline-none py-2"
           autoComplete="off"
-          style={{ fontSize: "2.2rem" }}
         />
         <div className="flex items-center justify-end">
           <span className={`text-xs ${isOverLimit ? "text-accent font-medium" : "text-muted-foreground/40"}`}>

@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     const endpoint = body.endpoint || "https://api.deepseek.com/v1/chat/completions";
-    const model = body.model || "deepseek-v4-flash";
+    const model = body.model || "";
 
     // Detect provider
     const isDeepSeek = endpoint.includes("api.deepseek.com");

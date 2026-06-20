@@ -9,8 +9,11 @@ import { AudioProvider } from "@/components/ui/audio-provider";
 import { TopBarContainer } from "@/components/ui/topbar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AmbientProvider } from "@/components/ui/ambient-provider";
-import { ThemeRuntimeProvider } from "@/components/ui/theme-runtime-provider";
+import { CursorTrail } from "@/components/ui/cursor-trail";
+// (theme runtime removed)
 import { UIPrefsProvider } from "@/components/ui/ui-prefs-provider";
+import { ErrorBoundary } from "@/components/ui/error-fallback";
+import { ViewTracker } from "@/components/ui/view-tracker";
 import { CompanionWidget } from "@/components/ui/companion";
 import { RightsideToolbar } from "@/components/ui/rightside-toolbar";
 import { AmbientEffects } from "@/components/ui/ambient-effects";
@@ -42,8 +45,22 @@ const geistMono = Geist_Mono({
 // Metadata
 // ───────────────────────────────────────────
 export const metadata: Metadata = {
-  title: "Digital Garden",
-  description: "一个属于自己的二次元数字花园",
+  title: "Digital Garden — Star's Digital Garden",
+  description: "一个属于自己的二次元数字花园 · 记录回忆、想法、梦境与故事",
+  authors: [{ name: "Star.Li曦曜", url: "https://starli-digital-garden.cn" }],
+  openGraph: {
+    title: "Star's Digital Garden",
+    description: "一个属于自己的二次元数字花园 · 记录回忆、想法、梦境与故事",
+    siteName: "Star's Digital Garden",
+    type: "website",
+    locale: "zh_CN",
+  },
+  twitter: {
+    card: "summary",
+    title: "Star's Digital Garden",
+    description: "一个属于自己的二次元数字花园",
+    creator: "@Star",
+  },
 };
 
 // ───────────────────────────────────────────
@@ -54,11 +71,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read theme cookie for server-side class application (prevents flash)
+  // Read theme cookie for server-side class application (prevents flash).
+  // Default to dark mode on first visit — client-side ThemeProvider will
+  // correct it if user/system prefers light.
   const cookieStore = await cookies();
-  const theme = cookieStore.get("theme")?.value ?? "system";
+  const theme = cookieStore.get("theme")?.value;
   const gardenTheme = cookieStore.get("garden-theme")?.value ?? "garden";
-  const isDark = theme === "dark";
+  const isDark = theme !== "light"; // no cookie = dark by default
 
   return (
     <html
@@ -72,18 +91,21 @@ export default async function RootLayout({
       <head />
       <body className="min-h-full flex flex-col">
         <ThemeProvider initialTheme={(theme as "light" | "dark" | "system") || "system"}>
+          <ViewTracker />
           <ToastProvider>
           <AudioProvider>
           <UIPrefsProvider />
-          <ThemeRuntimeProvider />
           <AmbientProvider />
+          <CursorTrail />
           <BackgroundProvider />
           <TopBarContainer>
             <Nav />
           </TopBarContainer>
           <PageBanner />
           <SidebarProvider>
-            <PageTransition>{children}</PageTransition>
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </SidebarProvider>
           <FooterConditional>
             <footer className="garden-footer mt-auto py-8">
@@ -92,10 +114,10 @@ export default async function RootLayout({
                 <div className="flex items-center justify-center gap-4 text-[0.625rem] text-muted-foreground mt-3">
                   <span>由 <a href="https://nextjs.org" target="_blank" className="hover:text-primary interactive">Next.js</a> 驱动</span>
                   <span className="text-border">|</span>
-                  <span>Digital Garden 3.0</span>
+                  <span>Digital Garden 4.0</span>
                 </div>
                 <p className="mt-2 text-[0.625rem] text-muted-foreground/50">
-                  © {new Date().getFullYear()} Star&apos;s Digital Garden. All Rights Reserved.
+                  © {new Date().getFullYear()} Star.Li曦曜 · Star&apos;s Digital Garden. All Rights Reserved.
                 </p>
               </div>
             </footer>
@@ -109,6 +131,34 @@ export default async function RootLayout({
           </AudioProvider>
           </ToastProvider>
         </ThemeProvider>
+        {/* JS error reporter — filters known harmless Live2D/Cubism SDK errors */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.onerror = function(msg, url, line, col, err) {
+            // Cubism SDK internals — non-critical, happens during async model init
+            if (msg && msg.indexOf('hitTest') !== -1) return true;
+            // React hydration mismatches — non-critical in production
+            if (msg && msg.indexOf('#418') !== -1) return true;
+            // Waifu library — non-critical race during model re-init
+            if (msg && msg.indexOf('innerHTML') !== -1) return true;
+            // Tampermonkey/Greasemonkey userscripts on user's device — not our code
+            if (msg && msg.indexOf('GM_getValue') !== -1) return true;
+            var el = document.createElement('div');
+            el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#c22;color:#fff;padding:12px;font:12px monospace;max-height:40vh;overflow:auto;';
+            el.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';
+            document.body.appendChild(el);
+          };
+        `}} />
+        {/* Console easter egg — authorship mark */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          console.log(
+            "\\n%c🌸 Star's Digital Garden %c4.0\\n%cBy Star.Li\\u66e6\\u66dc %c| Since 2026-06-13 %c| Updated 2026-06-18\\n%c\\u0068ttps://starli-digital-garden.cn",
+            "font-size:18px;color:#7a9668;font-weight:bold;",
+            "font-size:14px;color:#b8a080;",
+            "font-size:11px;color:#999;",
+            "font-size:11px;color:#999;",
+            "font-size:10px;color:#aab;"
+          );
+        `}} />
       </body>
     </html>
   );

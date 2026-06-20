@@ -11,14 +11,17 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { TitleInput, TypeSelector, TagInput } from "@/components/form";
+import { TitleInput, TypeSelector } from "@/components/form";
+import TagAutocomplete from "@/components/form/tag-autocomplete";
 import EditorWrapper from "@/components/editor/editor-wrapper";
 import { CoverImage } from "@/components/editor/cover-image";
 import { EditorFontSize } from "@/components/editor/editor-font-size";
 import { SourceMode } from "@/components/editor/source-mode";
+import SyntaxHelp from "@/components/editor/syntax-help";
 import type { EditorChangePayload } from "@/components/editor/tiptap-editor";
-import { createEntry } from "@/actions/entry-actions";
+import { createEntry, saveDraftToServer, deleteDraftFromServer } from "@/actions/entry-actions";
 import { jsonToMarkdown } from "@/lib/markdown";
+import { toast } from "@/components/ui/toast";
 
 const DRAFTS_KEY = "digital-garden-drafts";
 const DRAFT_DEBOUNCE_MS = 1000;
@@ -49,21 +52,10 @@ function loadDrafts(): Draft[] {
   } catch { return []; }
 }
 
+import { countWords, readingTimeMinutes } from "@/lib/word-count";
+
 function saveDrafts(drafts: Draft[]) {
   try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); } catch {}
-}
-
-const WORDS_PER_MINUTE = 200; // Chinese reading speed
-
-function countWords(md: string): number {
-  // Chinese: count characters; English: count words
-  const chineseChars = (md.match(/[一-鿿㐀-䶿]/g) || []).length;
-  const englishWords = (md.replace(/[一-鿿㐀-䶿]/g, " ").match(/\b\w+\b/g) || []).length;
-  return chineseChars + englishWords;
-}
-
-function readingTimeMinutes(wordCount: number): number {
-  return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE));
 }
 
 // ── Heading extraction ─────────────────────────────────
@@ -107,12 +99,13 @@ function PlantPageInner() {
   // Draft box state
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [showDrafts, setShowDrafts] = useState(false);
+  const [showSyntaxHelp, setShowSyntaxHelp] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [validation, setValidation] = useState<{ title?: string; content?: string }>({});
   const [sourceMode, setSourceMode] = useState(false);
-  const canSave = form.title.trim().length > 0 && form.content !== null && form.contentMd.trim().length > 0;
+  const canSave = form.title.trim().length > 0 && form.contentMd.trim().length > 0;
 
   // Word count
   const wordCount = countWords(form.contentMd);
@@ -166,6 +159,20 @@ function PlantPageInner() {
           updated = [...prev, newDraft];
         }
         saveDrafts(updated);
+
+        // 同步到服务器（fire-and-forget，仅登录用户生效）
+        const draft = updated.find((d) => d.id === (currentDraftId || updated[updated.length - 1]?.id));
+        if (draft) {
+          saveDraftToServer(draft.id.replace("draft-", ""), {
+            title: form.title,
+            type: form.type,
+            tags: form.tags,
+            content: form.content ? JSON.stringify(form.content) : "",
+            contentMd: form.contentMd,
+            coverImage: form.coverImage,
+          }).catch(() => {});
+        }
+
         return updated;
       });
     }, DRAFT_DEBOUNCE_MS);
@@ -215,81 +222,98 @@ function PlantPageInner() {
     setForm((p) => ({ ...p, coverImage: url }));
   }, []);
 
-  const handleSave = useCallback(async () => {
-    const v: { title?: string; content?: string } = {};
-    if (!form.title.trim()) v.title = "请输入标题";
-    if (!form.content || !form.contentMd.trim()) v.content = "请输入正文内容";
-    if (Object.keys(v).length > 0) { setValidation(v); return; }
+  // 通过 ref 始终拿到最新的 form，不依赖 useCallback 闭包
+  const formRef = useRef(form);
+  formRef.current = form;
+
+  const handleSave = async () => {
+    const f = formRef.current;
+
+    // 校验
+    if (!f.title.trim()) { setValidation({ title: "请输入标题" }); return; }
+    if (!f.contentMd.trim()) { setValidation({ content: "请输入正文内容" }); return; }
     setValidation({});
-    if (!canSave || !form.content) return;
     setSaving(true);
     setError(null);
 
-    // Convert blob URL cover image to data URL before saving
-    let coverSrc = form.coverImage;
-    if (coverSrc && coverSrc.startsWith("blob:")) {
-      try {
-        const blob = await fetch(coverSrc).then((r) => r.blob());
-        coverSrc = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-      } catch {
-        // Keep the blob URL as fallback
+    try {
+      // 封面图：blob URL → data URL
+      let coverSrc = f.coverImage;
+      if (coverSrc && coverSrc.startsWith("blob:")) {
+        try {
+          const blob = await fetch(coverSrc).then((r) => r.blob());
+          coverSrc = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch { /* keep blob URL */ }
       }
-    }
 
-    let finalContent = form.content;
-    if (coverSrc) {
-      finalContent = {
-        ...form.content,
-        content: [
-          { type: "paragraph", content: [{ type: "image", attrs: { src: coverSrc, alt: "cover" } }] },
-          ...((form.content as any).content || []),
-        ],
-      };
-    }
-
-    const result = await createEntry({
-      title: form.title.trim(),
-      type: form.type,
-      content: JSON.stringify(finalContent),
-      contentMd: form.contentMd,
-      tags: form.tags,
-    });
-
-    if (result.success) {
-      // Remove this draft
-      if (currentDraftId) {
-        setDrafts((prev) => {
-          const updated = prev.filter((d) => d.id !== currentDraftId);
-          saveDrafts(updated);
-          return updated;
-        });
+      // 获取/生成 TipTap JSON
+      let finalContent = f.content;
+      if (!finalContent) {
+        const { marked } = await import("marked");
+        const html = marked.parse(f.contentMd) as string;
+        const { generateJSON } = await import("@tiptap/core");
+        const StarterKit = await import("@tiptap/starter-kit");
+        finalContent = generateJSON(
+          html,
+          [StarterKit.default.configure({ heading: { levels: [1, 2, 3, 4, 5] } })],
+        ) as Record<string, unknown>;
       }
-      router.push(`/entry/${result.data.slug}`);
-    } else {
-      setError(result.error);
+      if (coverSrc) {
+        finalContent = {
+          ...finalContent,
+          content: [
+            { type: "paragraph", content: [{ type: "image", attrs: { src: coverSrc, alt: "cover" } }] },
+            ...((finalContent as any).content || []),
+          ],
+        };
+      }
+
+      const result = await createEntry({
+        title: f.title.trim(),
+        type: f.type,
+        content: JSON.stringify(finalContent),
+        contentMd: f.contentMd,
+        tags: f.tags,
+      });
+
+      if (result.success) {
+        if (currentDraftId) {
+          setDrafts((prev) => {
+            const updated = prev.filter((d) => d.id !== currentDraftId);
+            saveDrafts(updated);
+            return updated;
+          });
+          // 清理服务端草稿
+          deleteDraftFromServer(currentDraftId.replace("draft-", "")).catch(() => {});
+        }
+        router.push(`/entry/${result.data.slug}`);
+      } else {
+        setError(result.error || "保存失败");
+        setSaving(false);
+      }
+    } catch (e) {
+      console.error("handleSave error:", e);
+      setError("保存出错，请重试");
       setSaving(false);
     }
-  }, [form, canSave, router, currentDraftId]);
+  };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        handleSave();
-      }
-    },
-    [handleSave]
-  );
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      handleSave();
+    }
+  };
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]" onKeyDown={handleKeyDown}>
       {/* ====== TOC SIDEBAR (Typora-style, auto-hide when empty) ====== */}
       {hasHeadings && (
-        <aside className="w-44 shrink-0 border-r border-border bg-card/40 overflow-y-auto p-4 hidden xl:block">
+        <aside className="w-44 shrink-0 border-r border-border bg-card overflow-y-auto p-4 hidden xl:block" style={{ backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}>
           <p className="text-[0.625rem] text-muted-foreground uppercase tracking-wider mb-3">大纲</p>
           <nav className="space-y-0.5">
             {headings.map((h, i) => (
@@ -321,28 +345,39 @@ function PlantPageInner() {
 
       {/* ====== MAIN EDITOR ====== */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto py-12 px-6" style={{ maxWidth: "920px" }}>
-          {/* Draft box link */}
-          <div className="flex items-center gap-3 mb-4">
+        <div className="mx-auto py-12 px-6" style={{ maxWidth: "1200px" }}>
+          {/* Draft box link — glass toolbar, wraps on mobile */}
+          <div className="flex items-center gap-2 mb-4 garden-toolbar px-2 sm:px-3 py-1.5 flex-wrap">
             <Link
               href="/drafts"
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted interactive"
+              className="garden-ctrl-btn-muted interactive text-[0.6rem] sm:text-[0.688rem]"
             >
-              📋 草稿箱
+              <span className="hidden sm:inline">📋 草稿箱</span>
+              <span className="inline sm:hidden">📋</span>
               {drafts.length > 0 && (
-                <span className="bg-primary/15 text-primary text-[0.625rem] px-1.5 py-0.5 rounded-full font-medium">
+                <span className="bg-primary/15 text-primary text-[0.55rem] sm:text-[0.625rem] px-1 py-0.5 rounded-full font-medium">
                   {drafts.length}
                 </span>
               )}
             </Link>
             {currentDraftId && (
-              <span className="text-[0.625rem] text-muted-foreground/60">自动暂存中</span>
+              <span className="text-[0.55rem] sm:text-[0.625rem] text-muted-foreground/60 hidden sm:inline">自动暂存中</span>
             )}
             <button
               onClick={handleNewDraft}
-              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[0.688rem] text-muted-foreground hover:text-foreground hover:bg-muted interactive"
+              className="garden-ctrl-btn-muted interactive text-[0.6rem] sm:text-[0.688rem]"
             >
-              + 新建
+              <span className="hidden sm:inline">+ 新建</span>
+              <span className="inline sm:hidden">+</span>
+            </button>
+            <div className="flex-1 hidden sm:block" />
+            <button
+              onClick={() => setShowSyntaxHelp(true)}
+              className="garden-ctrl-btn-muted interactive text-[0.6rem] sm:text-[0.688rem]"
+              title="查看 Mermaid 和 LaTeX 语法帮助"
+            >
+              <span className="hidden sm:inline">📖 语法帮助</span>
+              <span className="inline sm:hidden">📖</span>
             </button>
           </div>
 
@@ -415,6 +450,7 @@ function PlantPageInner() {
               />
             ) : (
               <EditorWrapper
+                key={currentDraftId || "new"}
                 initialContent={form.content ? (form.content as Record<string, unknown>) : undefined}
                 onChange={(p) => {
                   handleEditorChange(p);
@@ -428,15 +464,18 @@ function PlantPageInner() {
             )}
           </div>
 
-          {/* Editor font size + Meta + Save */}
+          {/* Editor font size + Meta + Save — glass toolbar, wraps on mobile */}
           <div className="mt-5 pt-4 border-t border-border space-y-3">
             <EditorFontSize />
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground shrink-0">类型</span>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 garden-toolbar px-2 sm:px-4 py-2">
+              <span className="text-[0.6rem] sm:text-xs text-muted-foreground shrink-0">类型</span>
               <TypeSelector value={form.type} onChange={handleTypeChange} />
+              <div className="flex-1 hidden sm:block" />
+              <div className="w-full sm:w-auto sm:flex-1">
+                <TagAutocomplete value={form.tags} onChange={handleTagsChange} />
+              </div>
             </div>
-            <TagInput value={form.tags} onChange={handleTagsChange} />
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-2 sm:gap-3 pt-1">
               <button
                 onClick={() => {
                   // 暂存：手动触发一次立即保存到草稿箱
@@ -459,19 +498,25 @@ function PlantPageInner() {
                     if (!currentDraftId) setCurrentDraftId(draftId);
                     return updated;
                   });
+                  // 同步到服务器
+                  saveDraftToServer(draftId.replace("draft-", ""), {
+                    title: form.title,
+                    type: form.type,
+                    tags: form.tags,
+                    content: form.content ? JSON.stringify(form.content) : "",
+                    contentMd: form.contentMd,
+                    coverImage: form.coverImage,
+                  }).catch(() => {});
+                  toast.success("暂存成功");
                 }}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-4 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground interactive"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground hover:bg-card-hover hover:text-foreground interactive"
               >
                 💾 暂存
               </button>
               <button
                 onClick={handleSave}
-                disabled={!canSave || saving}
-                className={`inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-sm font-medium interactive ${
-                  canSave && !saving
-                    ? "bg-primary text-white hover:bg-primary-hover"
-                    : "bg-primary text-white opacity-50 cursor-not-allowed"
-                }`}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-sm font-medium interactive bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? "上传中…" : "📤 上传"}
               </button>
@@ -490,6 +535,9 @@ function PlantPageInner() {
           <span>{readTime} 分钟</span>
         </div>
       )}
+
+      {/* Syntax help modal */}
+      <SyntaxHelp open={showSyntaxHelp} onClose={() => setShowSyntaxHelp(false)} />
     </div>
   );
 }
